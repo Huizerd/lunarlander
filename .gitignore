@@ -105,3 +105,8 @@ venv.bak/
 
 # PyCharm
 .idea/
+
+# Result files
+train/
+test/
+record/

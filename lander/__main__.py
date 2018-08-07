@@ -13,11 +13,14 @@ from .agents import RandomAgent
 
 # Global variables
 SEED = 0
-OUTPUT_DIR = 'tmp/'
+TRAIN_DIR = 'train/'
+TEST_DIR = 'test/'
+RECORD_DIR = 'record/'
 
 # Create output directory if it doesn't exist
-if not os.path.exists(OUTPUT_DIR):
-    os.makedirs(OUTPUT_DIR)
+for d in [TRAIN_DIR, TEST_DIR, RECORD_DIR]:
+    if not os.path.exists(d):
+        os.makedirs(d)
 
 
 def main(**kwargs):
@@ -28,7 +31,7 @@ def main(**kwargs):
     """
 
     env = gym.make('LunarLander-v2')
-    env = wrappers.Monitor(env, directory=OUTPUT_DIR, force=True)  # records only a sample of episodes, not all
+    env = wrappers.Monitor(env, directory=RECORD_DIR, force=True)  # records only a sample of episodes, not all
     env.seed(SEED)
 
     if kwargs['agent'] == 'random':
@@ -57,9 +60,10 @@ def main(**kwargs):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('-a', '--agent', type=str, default='random', help='Choose the agent to use: random | sarsa',
-                        required=True)
+    parser.add_argument('-a', '--agent', type=str, default='random',
+                        help='Choose the agent to use: random | sarsa | qlearning')
     parser.add_argument('-e', '--episodes', type=int, default=10, help='Set the number of episodes')
+    parser.add_argument('-m', '--mode', type=str, default='test', help='Choose between train and test')
     kwargs = vars(parser.parse_args())
 
     # Determine the amount of info to receive
