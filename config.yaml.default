@@ -1,5 +1,6 @@
 # Environment and agent
-ENV: 'LunarLander-v2'
+ENV_NAME: 'LunarLander-v2'
+ENV_SEED: 0
 AGENT: 'random'
 
 # Data locations
@@ -9,12 +10,8 @@ RECORD_DIR: 'record/default/'
 CHECKPOINT_DIR: 'record/default/'
 
 # Run config
-SEED: 0
 EPISODES: 10
 SAVE_EVERY: 10
 STATE_BINS: 20
 RENDER: True
 CONTINUE: False
-
-
-

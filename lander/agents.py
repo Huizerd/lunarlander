@@ -3,14 +3,12 @@ Contains the agents that can be used.
 @author: Jesse Hagenaars
 """
 
+# TODO: allow for changing e-greedy and plot it
+# TODO: q-learning, deep q-learning (or any other continuous method)
+
 import numpy as np
 import pandas as pd
 
-
-# TODO: allow for changing e-greedy and plot it
-# TODO: q-learning, deep q-learning (or any other continuous method)
-# TODO: sort dataframe? --> performance warning about lexically sorting stuff
-# TODO: parameters in config.yaml
 
 class Agent:
     """

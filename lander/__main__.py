@@ -3,6 +3,12 @@ Runs the lander agent.
 @author: Jesse Hagenaars
 """
 
+# TODO: multi-processing
+# TODO: sort dataframe? --> performance warning about lexically sorting stuff
+# TODO: why more lexsort warnings?
+# TODO: parameters in config.yaml and checkpoint
+# TODO: distinct sampling per state dimension: x, y: 10, vel. x, y: 5, angle: 5, contact l, r: 2
+
 import argparse
 import os
 import pickle
@@ -14,9 +20,8 @@ from bottleneck import move_mean
 from gym import logger, wrappers
 
 from .agents import RandomAgent, SarsaAgent
+from .utilities import discretize_state
 
-
-# TODO: multi-processing
 
 def main(config):
     """
@@ -25,31 +30,54 @@ def main(config):
     :return:
     """
 
-    # Initialize environment
-    env = gym.make(config['ENV'])
-    env = wrappers.Monitor(env, directory=config['RECORD_DIR'],
-                           video_callable=lambda episode_id: episode_id % config['SAVE_EVERY'] == 0,
-                           force=True)  # record every nth episode
-    env.seed(config['SEED'])
-    episode_count = config['EPISODES']
-
-    # Select agent
-    if config['AGENT'] == 'random':
-        agent = RandomAgent(env.action_space)
-    elif config['AGENT'] == 'sarsa':
-        agent = SarsaAgent(env.action_space)
-    else:
-        raise ValueError('Invalid agent specified!')
-
     # Continue from checkpoint
     if config['CONTINUE']:
-        checkpoint = pickle.load(open(config['CHECKPOINT_DIR'], 'rb'))
-        episode_start = checkpoint['episode']
-        agent.q_table = checkpoint['q_table']
+        checkpoint = pickle.load(open(config['CHECKPOINT_DIR'] + 'checkpoint.pickle', 'rb'))
+
+        # Episode, score, state bins of previous run
+        episode_start = checkpoint['episode'] + 1  # increment to indicate current episode
         score = checkpoint['score']
+        state_bins = checkpoint['state_bins']
+        run = checkpoint['run'] + 1  # increment with 1 to indicate current run
+
+        # Initialize environment
+        env_name = checkpoint['env_name']
+        env_seed = checkpoint['env_seed']
+        env = gym.make(env_name)
+        env = wrappers.Monitor(env, directory=config['RECORD_DIR'] + f'run_{run}',
+                               video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
+                               force=True)  # record every nth episode, clear monitor files if present
+        env.seed(env_seed)
+
+        # Select agent
+        agent = checkpoint['agent']
+
     else:
+        # Start from scratch
         episode_start = 0
         score = []
+        state_bins = config['STATE_BINS']
+        run = 1
+
+        # Initialize environment
+        env_name = config['ENV_NAME']
+        env_seed = config['ENV_SEED']
+        env = gym.make(env_name)
+        env = wrappers.Monitor(env, directory=config['RECORD_DIR'] + f'run_{run}',
+                               video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
+                               force=True)  # record every nth episode, clear monitor files if present
+        env.seed(env_seed)
+
+        # Select agent
+        if config['AGENT'] == 'random':
+            agent = RandomAgent(env.action_space)
+        elif config['AGENT'] == 'sarsa':
+            agent = SarsaAgent(env.action_space)
+        else:
+            raise ValueError('Invalid agent specified!')
+
+    # Always get episode count from config --> you might want to lower it
+    episode_count = config['EPISODES']
 
     # Prepare plot
     plt.ion()
@@ -71,7 +99,7 @@ def main(config):
 
         # Initial values
         # State vector: x, y, Vx, Vy, angle, contact left, contact right (all between -1 and 1, discretized)
-        state = tuple([round(s) for s in env.reset()])
+        state = discretize_state(env.reset(), state_bins)
         crashed = False
         score_e = 0
         t = 0
@@ -88,7 +116,7 @@ def main(config):
 
             # Get next state and reward (discretized again)
             state_, reward_, crashed, _ = env.step(action)
-            state_ = tuple([round(s) for s in state_])
+            state_ = discretize_state(state_, state_bins)
 
             # Act
             action_ = agent.act(state_)
@@ -123,8 +151,9 @@ def main(config):
         fig.canvas.flush_events()
 
         # Save every nth episode
-        if e % config['SAVE_EVERY'] == 0:
-            save = {'episode': e, 'q_table': agent.q_table, 'score': score}
+        if (e + 1) % config['SAVE_EVERY'] == 0:
+            save = {'run': run, 'episode': e, 'env_name': env_name, 'env_seed': env_seed, 'state_bins': state_bins,
+                    'agent': agent, 'score': score}
             pickle.dump(save, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
             fig.savefig(config['RECORD_DIR'] + 'score.pdf')
 

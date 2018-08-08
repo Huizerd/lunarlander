@@ -21,21 +21,21 @@ Of course, other configurations can be specified. See `config.yaml.default` for 
 An example configuration, saved under `config.yaml`, would be:
 ```yaml
 # Environment and agent
-ENV: 'LunarLander-v2'
-AGENT: 'random'
+ENV_NAME: 'LunarLander-v2'
+ENV_SEED: 0
+AGENT: 'sarsa'
 
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/default/'
-CHECKPOINT_DIR: 'record/default/'
+RECORD_DIR: 'record/test/'
+CHECKPOINT_DIR: 'record/test/'
 
 # Run config
-SEED: 0
-EPISODES: 10
-SAVE_EVERY: 10
+EPISODES: 10000
+SAVE_EVERY: 100
 STATE_BINS: 20
-RENDER: True
+RENDER: False
 CONTINUE: False
 ```
 
