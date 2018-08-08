@@ -110,3 +110,6 @@ venv.bak/
 train/
 test/
 record/
+
+# Config file
+config.yaml

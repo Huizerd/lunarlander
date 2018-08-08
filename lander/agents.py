@@ -7,9 +7,10 @@ import numpy as np
 import pandas as pd
 
 
-# TODO: allow for changing e-greedy
-# TODO: gym implementation of checking if state exists
-# TODO: terminal == crashed?
+# TODO: allow for changing e-greedy and plot it
+# TODO: q-learning, deep q-learning (or any other continuous method)
+# TODO: sort dataframe? --> performance warning about lexically sorting stuff
+# TODO: parameters in config.yaml
 
 class Agent:
     """

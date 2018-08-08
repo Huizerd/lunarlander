@@ -5,55 +5,75 @@ Runs the lander agent.
 
 import argparse
 import os
+import pickle
 
 import gym
-from gym import logger
+import matplotlib.pyplot as plt
+import yaml
+from bottleneck import move_mean
+from gym import logger, wrappers
 
 from .agents import RandomAgent, SarsaAgent
 
-# TODO: discretize state?
-# TODO: fix render --> only record, not on screen? Also adjust docs then
 
-# Global variables
-SEED = 0
-RECORD_DIR = 'record/'
-ENV = 'LunarLander-v2'
+# TODO: multi-processing
 
-# Create output directory if it doesn't exist
-if not os.path.exists(RECORD_DIR):
-    os.makedirs(RECORD_DIR)
-
-
-def main(**kwargs):
+def main(config):
     """
     Runs the lander agent.
-    :param kwargs: Dict of keyword arguments from the parser
+    :param config: Dict containing the specified configuration
     :return:
     """
 
     # Initialize environment
-    env = gym.make(ENV)
-    # env = wrappers.Monitor(env, directory=RECORD_DIR + kwargs['agent'] + '/',
-    #                        force=True)  # records only a sample of episodes, not all
-    env.seed(SEED)
-    episode_count = kwargs['episodes']
+    env = gym.make(config['ENV'])
+    env = wrappers.Monitor(env, directory=config['RECORD_DIR'],
+                           video_callable=lambda episode_id: episode_id % config['SAVE_EVERY'] == 0,
+                           force=True)  # record every nth episode
+    env.seed(config['SEED'])
+    episode_count = config['EPISODES']
 
     # Select agent
-    if kwargs['agent'] == 'random':
+    if config['AGENT'] == 'random':
         agent = RandomAgent(env.action_space)
-    elif kwargs['agent'] == 'sarsa':
+    elif config['AGENT'] == 'sarsa':
         agent = SarsaAgent(env.action_space)
     else:
-        raise ValueError('No valid agent given!')
+        raise ValueError('Invalid agent specified!')
+
+    # Continue from checkpoint
+    if config['CONTINUE']:
+        checkpoint = pickle.load(open(config['CHECKPOINT_DIR'], 'rb'))
+        episode_start = checkpoint['episode']
+        agent.q_table = checkpoint['q_table']
+        score = checkpoint['score']
+    else:
+        episode_start = 0
+        score = []
+
+    # Prepare plot
+    plt.ion()
+    plt.style.use('fivethirtyeight')
+    fig = plt.figure()
+    ax1 = fig.add_subplot(211)
+    ax1.set_ylabel('score')
+    ax1.set_title('Score over epochs')
+    ax2 = fig.add_subplot(212)
+    ax2.set_xlabel('epoch')
+    ax2.set_ylabel('score')
+    ax2.set_title('Score moving average over epochs')
+
+    line1, = ax1.plot([0])  # returns a tuple of line objects, thus the comma
+    line2, = ax2.plot([0])
 
     # Start
-    for e in range(episode_count):
+    for e in range(episode_start, episode_count):
 
         # Initial values
-        # State vector: x, y, Vx, Vy, angle, contact left, contact right (all between -1 and 1)
-        state = tuple(env.reset())
+        # State vector: x, y, Vx, Vy, angle, contact left, contact right (all between -1 and 1, discretized)
+        state = tuple([round(s) for s in env.reset()])
         crashed = False
-        score = 0
+        score_e = 0
         t = 0
 
         # Initial action
@@ -62,13 +82,13 @@ def main(**kwargs):
 
         # Continue while not crashed
         while not crashed:
-            # Refresh environment
-            if kwargs['render']:
+            # Show on screen
+            if config['RENDER']:
                 env.render()
 
-            # Get next state and reward
+            # Get next state and reward (discretized again)
             state_, reward_, crashed, _ = env.step(action)
-            state_ = tuple(state_)
+            state_ = tuple([round(s) for s in state_])
 
             # Act
             action_ = agent.act(state_)
@@ -79,25 +99,56 @@ def main(**kwargs):
             # Set next state and action to current
             state = state_
             action = action_
-            score += reward_
+            score_e += reward_
 
             # Increment time for this episode
             t += 1
 
-        print(f'Episode {e + 1} finished after {t + 1} timesteps with a score of {score}')
+        # Print results
+        logger.info(f'Episode {e + 1} finished after {t + 1} timesteps with a score of {score_e}')
+
+        # Append score
+        score.append(score_e)
+        score_ma = move_mean(score, window=(100 if len(score) > 99 else len(score)), min_count=1)
+
+        # Update plot
+        line1.set_data(range(1, e + 2), score)
+        line2.set_data(range(1, e + 2), score_ma)
+        ax1.relim()
+        ax2.relim()
+        ax1.autoscale_view()
+        ax2.autoscale_view()
+        fig.tight_layout()
+        fig.canvas.draw()
+        fig.canvas.flush_events()
+
+        # Save every nth episode
+        if e % config['SAVE_EVERY'] == 0:
+            save = {'episode': e, 'q_table': agent.q_table, 'score': score}
+            pickle.dump(save, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
+            fig.savefig(config['RECORD_DIR'] + 'score.pdf')
 
     env.close()
 
 
 if __name__ == '__main__':
+
+    # Parse for configuration file
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('-a', '--agent', type=str, default='random',
-                        help='Choose the agent to use: random | sarsa | qlearning')
-    parser.add_argument('-e', '--episodes', type=int, default=10, help='Set the number of episodes')
-    parser.add_argument('-r', '--render', type=bool, default=True, help='Choose to render on-screen')
-    kwargs = vars(parser.parse_args())
+    parser.add_argument('-c', '--config', type=str, default='config.yaml.default',
+                        help='Select the configuration file')
+    args = vars(parser.parse_args())
+
+    # Load configuration
+    with open(args['config'], 'r') as config_file:
+        config = yaml.load(config_file)
+
+    # Create recording directory if it doesn't exist
+    if not os.path.exists(config['RECORD_DIR']):
+        os.makedirs(config['RECORD_DIR'])
 
     # Determine the amount of info to receive
-    logger.set_level(logger.WARN)
+    logger.set_level(logger.INFO)
 
-    main(**kwargs)
+    # Run main
+    main(config)

@@ -1,0 +1,20 @@
+# Environment and agent
+ENV: 'LunarLander-v2'
+AGENT: 'random'
+
+# Data locations
+# NOTE: setting RECORD_DIR to an existing directory will overwrite!
+# NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
+RECORD_DIR: 'record/default/'
+CHECKPOINT_DIR: 'record/default/'
+
+# Run config
+SEED: 0
+EPISODES: 10
+SAVE_EVERY: 10
+STATE_BINS: 20
+RENDER: True
+CONTINUE: False
+
+
+

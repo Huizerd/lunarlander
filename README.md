@@ -17,15 +17,37 @@ To run the default configuration (random agent, 10 episodes):
 ```bash
 $ python -m lander
 ```
-In addition to this, there are various parser arguments that can be supplied:
-- `-a`, `--agent`: choose the agent to use, either `random` or `sarsa`
-- `-e`, `--episodes`: the number of episodes to run for
-- `-r`, `--render`: whether to render and record the environment on-screen
+Of course, other configurations can be specified. See `config.yaml.default` for the default values.
+An example configuration, saved under `config.yaml`, would be:
+```yaml
+# Environment and agent
+ENV: 'LunarLander-v2'
+AGENT: 'random'
 
-So, for example:
-```bash
-$ python -m lander -a sarsa -e 10000 -r True
+# Data locations
+# NOTE: setting RECORD_DIR to an existing directory will overwrite!
+# NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
+RECORD_DIR: 'record/default/'
+CHECKPOINT_DIR: 'record/default/'
+
+# Run config
+SEED: 0
+EPISODES: 10
+SAVE_EVERY: 10
+STATE_BINS: 20
+RENDER: True
+CONTINUE: False
 ```
+
+Which would then be called like this:
+```bash
+$ python -m lander -c config.yaml
+```
+
+## Agents
+As of now, the available agents are:
+- Random
+- Sarsa
 
 ## Environment
 Additional information about the environment can be found on the environment's [webpage](https://gym.openai.com/envs/LunarLander-v2/), or in the [source code](https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py).
@@ -45,3 +67,5 @@ The state vector consists of eight variables (in this order) between -1 and 1:
 - Lander angle
 - Contact left leg
 - Contact right leg
+
+To make the learning problem (more) tractable, the state can be discretized into a certain number of bins.
