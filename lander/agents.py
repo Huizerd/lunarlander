@@ -28,6 +28,9 @@ class Agent:
         # Get from environment
         self.action_space = action_space
 
+        # Seed
+        np.random.seed(config['ENV_SEED'])
+
         # Defaults
         if config is None:
             learning_rate = (0, -1, 0.001, 0.001)

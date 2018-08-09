@@ -11,12 +11,11 @@ import os
 import pickle
 
 import gym
-import matplotlib.pyplot as plt
 import yaml
-from bottleneck import move_mean
 from gym import logger, wrappers
 
 from .agents import RandomAgent, SarsaAgent
+from .utilities import prepare_plots, update_plots
 
 
 def main(config):
@@ -73,34 +72,14 @@ def main(config):
         else:
             raise ValueError('Invalid agent specified!')
 
-    # Prepare plot
-    plt.ion()
-    plt.style.use('fivethirtyeight')
-    fig = plt.figure()
-    ax1 = fig.add_subplot(311)
-    ax1.set_ylabel('score')
-    ax1.set_title('Score over episodes')
-    ax2 = fig.add_subplot(312)
-    ax2.set_xlabel('episode')
-    ax2.set_ylabel('score')
-    ax2.set_title('Score moving average over episodes')
-    ax3 = fig.add_subplot(313)
-    ax3.set_xlabel('episode')
-    ax3.set_ylabel('epsilon')
-    ax3.set_title('Epsilon for e-greedy over episodes')
-    line1, = ax1.plot([0])  # returns a tuple of line objects, thus the comma
-    line2, = ax2.plot([0])
-    line3, = ax3.plot([0])
-
-    import time
-    start = time.time()
+    # Prepare plots
+    figure, axes, lines = prepare_plots()
 
     # Start
     for e in range(episode_start, episode_count):
 
         # Initial values
         # State vector: x, y, V_x, V_y, angle, V_angular, contact left, contact right
-        #   (all between -1 and 1, discretized)
         state = env.reset()
         crashed = False
         score_e = 0
@@ -117,7 +96,7 @@ def main(config):
             if config['RENDER']:
                 env.render()
 
-            # Get next state and reward (discretized again)
+            # Get next state and reward
             state_, reward_, crashed, _ = env.step(action)
 
             # Act
@@ -139,29 +118,18 @@ def main(config):
 
         # Append score
         score.append(score_e)
-        score_ma = move_mean(score, window=(100 if len(score) > 99 else len(score)), min_count=1)
 
-        # Update plot
-        line1.set_data(range(1, e + 2), score)
-        line2.set_data(range(1, e + 2), score_ma)
-        line3.set_data(range(1, e + 2), agent.epsilon[:e + 1])
-        ax1.relim()
-        ax2.relim()
-        ax3.relim()
-        ax1.autoscale_view()
-        ax2.autoscale_view()
-        ax3.autoscale_view()
-        fig.tight_layout()
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        # Update plots
+        figure = update_plots(figure, axes, lines, e, score, agent.epsilon)
 
         # Save every nth episode
         if (e + 1) % config['SAVE_EVERY'] == 0:
             save = {'run': run, 'episode_start': e, 'episode_count': episode_count, 'env_name': env_name,
                     'env_seed': env_seed, 'state_bins': state_bins, 'agent': agent, 'score': score}
             pickle.dump(save, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
-            fig.savefig(config['RECORD_DIR'] + 'score.pdf')
+            figure.savefig(config['RECORD_DIR'] + 'score.pdf')
 
+    # Close environment
     env.close()
 
 
