@@ -12,6 +12,15 @@ CHECKPOINT_DIR: 'record/default/'
 # Run config
 EPISODES: 10
 SAVE_EVERY: 10
-STATE_BINS: 20
+STATE_BINS: [20, 20, 4, 4, 6, 4, 2, 2]  # per state dimension
+STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
+               [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0]]  # per state dimension
 RENDER: True
 CONTINUE: False
+
+# Learning config
+# Format: start episode, end episode, start value, end value
+# NOTE: linear slope between start and end, then constant
+E_GREEDY: [0, -1, 0.9, 0.9]  # -1 indicates last episode
+LEARNING_RATE: [0, -1, 0.01, 0.01]
+DISCOUNT_RATE: [0, -1, 0.9, 0.9]

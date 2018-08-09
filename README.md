@@ -34,9 +34,20 @@ CHECKPOINT_DIR: 'record/test/'
 # Run config
 EPISODES: 10000
 SAVE_EVERY: 100
-STATE_BINS: 20
+STATE_BINS: [10, 10, 4, 4, 6, 4, 2, 2]  # per state dimension
+STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
+               [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0]]  # per state dimension
 RENDER: False
 CONTINUE: False
+
+# Learning config
+# Format: start episode, end episode, start value, end value
+# NOTE: linear slope between start and end, then constant
+E_GREEDY: [0, 500, 0.0, 0.9]
+LEARNING_RATE: [0, -1, 0.01, 0.001]  # -1 indicates last episode
+DISCOUNT_RATE: [0, -1, 0.9, 0.9]
+
+
 ```
 
 Which would then be called like this:
@@ -60,12 +71,13 @@ There are four discrete actions the lander can take:
 
 ### State
 The state vector consists of eight variables (in this order) between -1 and 1:
-- Position in x
-- Position in y
-- Velocity in x
-- Velocity in y
+- Lander position in x
+- Lander position in y
+- Lander velocity in x
+- Lander velocity in y
 - Lander angle
-- Contact left leg
-- Contact right leg
+- Lander angular velocity
+- Contact left landing leg
+- Contact right landing leg
 
 To make the learning problem (more) tractable, the state can be discretized into a certain number of bins.

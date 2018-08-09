@@ -4,10 +4,7 @@ Runs the lander agent.
 """
 
 # TODO: multi-processing
-# TODO: sort dataframe? --> performance warning about lexically sorting stuff
-# TODO: why more lexsort warnings?
-# TODO: parameters in config.yaml and checkpoint
-# TODO: distinct sampling per state dimension: x, y: 10, vel. x, y: 5, angle: 5, contact l, r: 2
+# TODO: exploit symmetry
 
 import argparse
 import os
@@ -20,7 +17,6 @@ from bottleneck import move_mean
 from gym import logger, wrappers
 
 from .agents import RandomAgent, SarsaAgent
-from .utilities import discretize_state
 
 
 def main(config):
@@ -35,7 +31,8 @@ def main(config):
         checkpoint = pickle.load(open(config['CHECKPOINT_DIR'] + 'checkpoint.pickle', 'rb'))
 
         # Episode, score, state bins of previous run
-        episode_start = checkpoint['episode'] + 1  # increment to indicate current episode
+        episode_start = checkpoint['episode_start'] + 1  # increment to indicate current episode
+        episode_count = checkpoint['episode_count']
         score = checkpoint['score']
         state_bins = checkpoint['state_bins']
         run = checkpoint['run'] + 1  # increment with 1 to indicate current run
@@ -51,10 +48,10 @@ def main(config):
 
         # Select agent
         agent = checkpoint['agent']
-
     else:
         # Start from scratch
         episode_start = 0
+        episode_count = config['EPISODES']
         score = []
         state_bins = config['STATE_BINS']
         run = 1
@@ -68,61 +65,66 @@ def main(config):
                                force=True)  # record every nth episode, clear monitor files if present
         env.seed(env_seed)
 
-        # Select agent
+        # Select and configure agent
         if config['AGENT'] == 'random':
-            agent = RandomAgent(env.action_space)
+            agent = RandomAgent(env.observation_space, env.action_space, episode_count)
         elif config['AGENT'] == 'sarsa':
-            agent = SarsaAgent(env.action_space)
+            agent = SarsaAgent(env.observation_space, env.action_space, episode_count, config)
         else:
             raise ValueError('Invalid agent specified!')
-
-    # Always get episode count from config --> you might want to lower it
-    episode_count = config['EPISODES']
 
     # Prepare plot
     plt.ion()
     plt.style.use('fivethirtyeight')
     fig = plt.figure()
-    ax1 = fig.add_subplot(211)
+    ax1 = fig.add_subplot(311)
     ax1.set_ylabel('score')
-    ax1.set_title('Score over epochs')
-    ax2 = fig.add_subplot(212)
-    ax2.set_xlabel('epoch')
+    ax1.set_title('Score over episodes')
+    ax2 = fig.add_subplot(312)
+    ax2.set_xlabel('episode')
     ax2.set_ylabel('score')
-    ax2.set_title('Score moving average over epochs')
-
+    ax2.set_title('Score moving average over episodes')
+    ax3 = fig.add_subplot(313)
+    ax3.set_xlabel('episode')
+    ax3.set_ylabel('epsilon')
+    ax3.set_title('Epsilon for e-greedy over episodes')
     line1, = ax1.plot([0])  # returns a tuple of line objects, thus the comma
     line2, = ax2.plot([0])
+    line3, = ax3.plot([0])
+
+    import time
+    start = time.time()
 
     # Start
     for e in range(episode_start, episode_count):
 
         # Initial values
-        # State vector: x, y, Vx, Vy, angle, contact left, contact right (all between -1 and 1, discretized)
-        state = discretize_state(env.reset(), state_bins)
+        # State vector: x, y, V_x, V_y, angle, V_angular, contact left, contact right
+        #   (all between -1 and 1, discretized)
+        state = env.reset()
         crashed = False
         score_e = 0
         t = 0
 
         # Initial action
         # Action vector: do nothing, fire left, fire main, fire right
-        action = agent.act(state)
+        action = agent.act(state, e)
 
         # Continue while not crashed
         while not crashed:
+
             # Show on screen
             if config['RENDER']:
                 env.render()
 
             # Get next state and reward (discretized again)
             state_, reward_, crashed, _ = env.step(action)
-            state_ = discretize_state(state_, state_bins)
 
             # Act
-            action_ = agent.act(state_)
+            action_ = agent.act(state_, e)
 
             # Learn
-            agent.learn(crashed, state, action, reward_, state_, action_)
+            agent.learn(e, crashed, state, action, reward_, state_, action_)
 
             # Set next state and action to current
             state = state_
@@ -142,18 +144,21 @@ def main(config):
         # Update plot
         line1.set_data(range(1, e + 2), score)
         line2.set_data(range(1, e + 2), score_ma)
+        line3.set_data(range(1, e + 2), agent.epsilon[:e + 1])
         ax1.relim()
         ax2.relim()
+        ax3.relim()
         ax1.autoscale_view()
         ax2.autoscale_view()
+        ax3.autoscale_view()
         fig.tight_layout()
         fig.canvas.draw()
         fig.canvas.flush_events()
 
         # Save every nth episode
         if (e + 1) % config['SAVE_EVERY'] == 0:
-            save = {'run': run, 'episode': e, 'env_name': env_name, 'env_seed': env_seed, 'state_bins': state_bins,
-                    'agent': agent, 'score': score}
+            save = {'run': run, 'episode_start': e, 'episode_count': episode_count, 'env_name': env_name,
+                    'env_seed': env_seed, 'state_bins': state_bins, 'agent': agent, 'score': score}
             pickle.dump(save, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
             fig.savefig(config['RECORD_DIR'] + 'score.pdf')
 
