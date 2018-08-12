@@ -3,259 +3,497 @@ Contains the agents that can be used.
 @author: Jesse Hagenaars
 """
 
-# TODO: q-learning, deep q-learning (or any other continuous method)
+import pickle
+from collections import deque
+from copy import deepcopy
 
-from functools import reduce
-
+import gym
 import numpy as np
-import pandas as pd
+from gym import logger
+from gym.wrappers import Monitor
+from keras.layers import Dense
+from keras.models import Sequential
+from keras.optimizers import Adam
+from keras.regularizers import l2
 
 
-class Agent:
+class RandomAgent:
     """
-    Base class for RL agents.
+    Base/random class for RL agents.
     """
 
-    def __init__(self, state_space, action_space, episodes, config=None):
+    def __init__(self, config):
         """
         Agent initialization.
-        :param state_space:
-        :param action_space:
-        :param episodes:
         :param config:
         """
 
-        # Get from environment
-        self.action_space = action_space
+        # Running configuration
+        self.episode_start = 0
+        self.episode_count = config['EPISODES']
+        self.run = 1
 
-        # Seed
-        np.random.seed(config['ENV_SEED'])
+        # Env
+        self.env_id = config['ENV_ID']
+        self.env_seed = config['ENV_SEED']
+        self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'] + f'run_{self.run}',
+                           video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
+                           force=True)  # record every nth episode, clear monitor files if present
+        self.env.seed(self.env_seed)
 
-        # Defaults
-        if config is None:
-            learning_rate = (0, -1, 0.001, 0.001)
-            discount_rate = (0, -1, 0.9, 0.9)
-            e_greedy = (0, -1, 0.9, 0.9)
-        else:
-            learning_rate = config['LEARNING_RATE']
-            discount_rate = config['DISCOUNT_RATE']
-            e_greedy = config['E_GREEDY']
+        # Get random number generator
+        self.prng = np.random.RandomState(self.env_seed)
 
-        # Flat part with starting value, then linear sloping part, then flat part with final value
-        self.lr = np.concatenate([np.ones(learning_rate[0]) * learning_rate[2],
-                                  np.linspace(learning_rate[2], learning_rate[3],
-                                              num=(episodes if learning_rate[1] == -1 else learning_rate[1]) -
-                                                  learning_rate[0]),
-                                  np.ones(episodes - (episodes if learning_rate[1] == -1 else learning_rate[1])) *
-                                  learning_rate[3]], axis=0)
-        self.gamma = np.concatenate([np.ones(discount_rate[0]) * discount_rate[2],
-                                     np.linspace(discount_rate[2], discount_rate[3],
-                                                 num=(episodes if discount_rate[1] == -1 else discount_rate[1]) -
-                                                     discount_rate[0]),
-                                     np.ones(episodes - (episodes if discount_rate[1] == -1 else discount_rate[1])) *
-                                     discount_rate[3]], axis=0)
-        self.epsilon = np.concatenate([np.ones(e_greedy[0]) * e_greedy[2],
-                                       np.linspace(e_greedy[2], e_greedy[3],
-                                                   num=(episodes if e_greedy[1] == -1 else e_greedy[1]) -
-                                                       e_greedy[0]),
-                                       np.ones(episodes - (episodes if e_greedy[1] == -1 else e_greedy[1])) *
-                                       e_greedy[3]], axis=0)
+        # Score/rewards over time
+        # Deque allows quick appends and pops and has a max length
+        self.score = deque(maxlen=self.episode_count)
+        self.score_100 = deque(maxlen=100)  # for keeping track of mean of last 100
 
-        # Discretize state space
-        self.discretize_state(config['STATE_BOUNDS'], config['STATE_BINS'])
+    def act(self, *args):
+        """
+        Perform a random action!
+        :param args:
+        :return:
+        """
+        return self.prng.randint(self.env.action_space.n)
 
-        # Filled with random, size depends on discretization of state
-        n_states = reduce(lambda x, y: x * y, config['STATE_BINS'])
-        self.q_table = np.random.uniform(low=-1.0, high=1.0, size=(n_states, action_space.n))
-
-    def check_state_exist(self, state):
+    def do_episode(self, config, episode):
         """
 
-        :param state: Tuple containing the state
+        :param config:
+        :param episode:
         :return:
         """
 
-        # Append state if it doesn't exist
-        if state not in self.q_table.index:
-            self.q_table = self.q_table.append(
-                pd.DataFrame([np.zeros(self.action_space.n)], columns=range(self.action_space.n),
-                             index=[state]))
+        # Reset environment
+        self.env.reset()
 
-    def act(self, state, episode):
+        # Initial values
+        done = False
+        score_e = 0
+        t_e = 0
+
+        # Continue while not crashed
+        while not done:
+
+            # Show on screen
+            if config['RENDER']:
+                self.env.render()
+
+            # Act
+            action = self.act()
+            _, reward, done, _ = self.env.step(action)
+
+            # Increment score and time for this episode
+            score_e += reward
+            t_e += 1
+
+        # Append score
+        self.score.append(score_e)
+        self.score_100.append(score_e)
+        mean_score = np.mean(self.score_100)
+
+        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+
+    def save_checkpoint(self, config, episode):
         """
-        Determine which action to take.
-        :param state: List containing the state
-        :param episode: Current episode
-        :return: Integer representing action to take
-        """
 
-        # Select best/random action based on e-greedy policy
-        if np.random.random() < self.epsilon[episode]:
-            # Flatten state to get list index
-            flat_state = self.flatten_state(state)
-
-            # Do best action
-            action = np.argmax(self.q_table[flat_state, :])
-        else:
-            # Do random action
-            action = self.action_space.sample()
-
-        return action
-
-    def learn(self, *args):
-        pass
-
-    def create_bins(self, between, n):
-        """
-
-        :param between:
-        :param n:
+        :param config:
+        :param episode:
         :return:
         """
 
-        # Throw out the edges, so everything beyond the edge is the same as outer bin
-        return pd.cut(between, bins=n, retbins=True)[1][1:-1]
+        # Env can't be saved
+        dummy_env = self.env
+        self.env = None
 
-    def discretize_state(self, state_bounds, n_bins):
-        """
-        Discretizes the state vector into a specified number of bins.
-        :param state_bounds: State space bounds per state dimension
-        :param n_bins: List containing the number of bins per state dimension
-        :return: Tuple of discretized state bin indices
-        """
+        # Create copy
+        agent_copy = deepcopy(self)
 
-        # Discretize
-        self.discretized_state = [self.create_bins(between, n) for between, n in zip(state_bounds, n_bins)]
+        # Increment to not do the same thing twice
+        agent_copy.run += 1
+        agent_copy.episode_start = episode + 1
 
-    def flatten_state(self, state):
-        """
-        Collapses state into bins, then flattens it into 1D.
-        :param state:
-        :return:
-        """
+        # Save checkpoint
+        pickle.dump(agent_copy, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
 
-        # Combine state values with bins per dimension
-        pairs = list(zip(state, self.discretized_state))
-
-        # Discretize state
-        # Account for zero-length bins: if we want to neglect state dimensions
-        discrete_state = [np.digitize(*pair).item() if pair[1].size else 0 for pair in pairs]
-
-        # Multiply all bin indices + 1 to get the 1D index, then subtract 1 to account for 0-indexed lists
-        flat_state = reduce(lambda x, y: x * y, [d + 1 for d in discrete_state]) - 1
-
-        return flat_state
+        # Put env back
+        self.env = dummy_env
 
 
-class RandomAgent(Agent):
-    """
-    Simplest agent possible!
-    """
-
-    def __init__(self, state_space, action_space, episodes):
-        """
-
-        :param state_space:
-        :param action_space:
-        :param episodes:
-        """
-        super().__init__(state_space, action_space, episodes)
-
-    def act(self, state, episode):
-        """
-
-        :param state: Tuple containing the state
-        :param episode: Current episode
-        :return:
-        """
-        return self.action_space.sample()
-
-
-class SarsaAgent(Agent):
+class SarsaAgent(RandomAgent):
     """
     Agent that makes use of Sarsa (on-policy TD control).
     """
 
-    def __init__(self, state_space, action_space, episodes, config=None):
+    def __init__(self, config):
         """
 
-        :param state_space:
-        :param action_space:
-        :param episodes:
         :param config:
         """
-        super().__init__(state_space, action_space, episodes, config)
 
-    def learn(self, episode, crashed, s, a, r_, s_, a_):
+        # Initialize base class
+        super().__init__(config)
+
+        # State
+        self.state_bounds = config['STATE_BOUNDS']
+        self.state_bins = tuple(config['STATE_BINS'])
+
+        # Learning parameters
+        # First linear decay, then exponential decay
+        self.alpha_start, self.alpha_end, self.alpha_steps, self.alpha_decay = config['LEARNING_RATE']
+        self.epsilon_start, self.epsilon_end, self.epsilon_steps, self.epsilon_decay = config['E_GREEDY']
+        self.gamma = config['DISCOUNT_RATE']
+
+        # Q-table
+        self.q_table = self.prng.uniform(low=-1.0, high=1.0, size=self.state_bins + (self.env.action_space.n,))
+
+    def act(self, state, epsilon):
         """
 
-        :param episode: Current episode
-        :param crashed: Whether the lander has crashed or not
-        :param s: Tuple containing current state
-        :param a: Integer representing current action
-        :param r_: Next reward
-        :param s_: Tuple containing next state
-        :param a_: Integer representing next action
+        :param state:
+        :param epsilon:
         :return:
         """
 
-        # Flatten current state s and next state s'
-        flat_s = self.flatten_state(s)
-        flat_s_ = self.flatten_state(s_)
+        if self.prng.random_sample() < epsilon:
+            return self.prng.randint(self.env.action_space.n)
+        else:
+            return np.argmax(self.q_table[state])
+
+    def discretize_state(self, state):
+        """
+
+        :param state:
+        :return:
+        """
+
+        # First calculate the ratios, then convert to bin indices
+        ratios = [(state[i] + abs(self.state_bounds[i][0])) / (self.state_bounds[i][1] - self.state_bounds[i][0]) for i
+                  in range(len(state))]
+        state_d = [int(round((self.state_bins[i] - 1) * ratios[i])) for i in range(len(state))]
+        state_d = [min(self.state_bins[i] - 1, max(0, state_d[i])) for i in range(len(state))]
+
+        return tuple(state_d)
+
+    def learn(self, done, alpha, s, a, r, s_, a_):
+        """
+
+        :param done:
+        :param alpha:
+        :param s:
+        :param a:
+        :param r:
+        :param s_:
+        :param a_:
+        :return:
+        """
 
         # Get current Q(s, a)
-        q = self.q_table[flat_s, a]
+        q = self.q_table[s][a]
 
-        # Check if state is terminal, and get next Q(s', a')
-        if not crashed:
-            q_ = r_ + self.gamma[episode] * self.q_table[flat_s_, a_]
+        # Check if next state is terminal, get next Q(s', a')
+        if not done:
+            q_ = r + self.gamma * self.q_table[s_][a_]
         else:
-            q_ = r_
+            q_ = r
 
         # Update current Q(s, a)
-        self.q_table[flat_s, a] += self.lr[episode] * (q_ - q)
+        self.q_table[s][a] += alpha * (q_ - q)
+
+    def do_episode(self, config, episode):
+        """
+
+        :param config:
+        :param episode:
+        :return:
+        """
+
+        # Initial values
+        done = False
+        score_e = 0
+        t_e = 0
+
+        # Get learning parameters
+        alpha = self.get_alpha(episode)
+        epsilon = self.get_epsilon(episode)
+
+        # Get current state s, act based on s
+        state = self.discretize_state(self.env.reset())
+        action = self.act(state, epsilon)
+
+        # Continue while not crashed
+        while not done:
+
+            # Show on screen
+            if config['RENDER']:
+                self.env.render()
+
+            # Get next state s' and reward, act based on s'
+            state_, reward, done, _ = self.env.step(action)
+            state_ = self.discretize_state(state_)
+            action_ = self.act(state_, epsilon)
+
+            # Learn
+            self.learn(done, alpha, state, action, reward, state_, action_)
+
+            # Set next state and action to current
+            state = state_
+            action = action_
+
+            # Increment score and time for this episode
+            score_e += reward
+            t_e += 1
+
+        # Append score
+        self.score.append(score_e)
+        self.score_100.append(score_e)
+        mean_score = np.mean(self.score_100)
+
+        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+
+    def get_alpha(self, episode):
+        """
+
+        :param episode:
+        :return:
+        """
+
+        # Linear decay, then exponential decay
+        if episode <= self.alpha_steps and self.alpha_steps > 0:
+            alpha = self.alpha_start - episode * (self.alpha_start - self.alpha_end) / self.alpha_steps
+        else:
+            alpha = self.alpha_end * self.alpha_decay ** (episode - self.alpha_steps)
+
+        return alpha
+
+    def get_epsilon(self, episode):
+        """
+
+        :param episode:
+        :return:
+        """
+
+        # Linear decay, then exponential decay
+        if episode <= self.epsilon_steps and self.epsilon_steps > 0:
+            epsilon = self.epsilon_start - episode * (self.epsilon_start - self.epsilon_end) / self.epsilon_steps
+        else:
+            epsilon = self.epsilon_end * self.epsilon_decay ** (episode - self.epsilon_steps)
+
+        return epsilon
 
 
-class QAgent(Agent):
+class QAgent(SarsaAgent):
     """
     Agent that makes use of Q-learning (off-policy TD control).
     """
 
-    def __init__(self, state_space, action_space, episodes, config=None):
+    def __init__(self, config):
         """
 
-        :param state_space:
-        :param action_space:
-        :param episodes:
         :param config:
         """
-        super().__init__(state_space, action_space, episodes, config)
+        super().__init__(config)
 
-    def learn(self, episode, crashed, s, a, r_, s_, a_=None):
+    def learn(self, done, alpha, s, a, r, s_, a_=None):
         """
 
-        :param episode: Current episode
-        :param crashed: Whether the lander has crashed or not
-        :param s: Tuple containing current state
-        :param a: Integer representing current action
-        :param r_: Next reward
-        :param s_: Tuple containing next state
-        :param a_: Integer representing next action (not used)
+        :param done:
+        :param alpha:
+        :param s:
+        :param a:
+        :param r:
+        :param s_:
+        :param a_:
         :return:
         """
 
-        # Flatten current state s and next state s'
-        flat_s = self.flatten_state(s)
-        flat_s_ = self.flatten_state(s_)
-
         # Get current Q(s, a)
-        q = self.q_table[flat_s, a]
+        q = self.q_table[s][a]
 
-        # Check if state is terminal, and get next Q(s', a')
-        if not crashed:
-            q_ = r_ + self.gamma[episode] * max(self.q_table[flat_s_, :])
+        # Check if next state is terminal, get next maximum Q-value
+        if not done:
+            q_ = r + self.gamma * max(self.q_table[s_])
         else:
-            q_ = r_
+            q_ = r
 
         # Update current Q(s, a)
-        self.q_table[flat_s, a] += self.lr[episode] * (q_ - q)
+        self.q_table[s][a] += alpha * (q_ - q)
+
+    def do_episode(self, config, episode):
+        """
+
+        :param config:
+        :param episode:
+        :return:
+        """
+
+        # Initial values
+        done = False
+        score_e = 0
+        t_e = 0
+
+        # Get learning parameters
+        alpha = self.get_alpha(episode)
+        epsilon = self.get_epsilon(episode)
+
+        # Get current state s
+        state = self.discretize_state(self.env.reset())
+
+        # Continue while not crashed
+        while not done:
+
+            # Show on screen
+            if config['RENDER']:
+                self.env.render()
+
+            # Act based on current state s
+            action = self.act(state, epsilon)
+            state_, reward, done, _ = self.env.step(action)
+            state_ = self.discretize_state(state_)
+
+            # Learn
+            self.learn(done, alpha, state, action, reward, state_)
+
+            # Set next state to current
+            state = state_
+
+            # Increment score and time for this episode
+            score_e += reward
+            t_e += 1
+
+        # Append score
+        self.score.append(score_e)
+        self.score_100.append(score_e)
+        mean_score = np.mean(self.score_100)
+
+        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+
+
+class DeepQAgent(QAgent):
+    """
+    Agent that makes use of Deep Q-learning, where Q(s, a) is approximated using a neural network.
+    """
+
+    def __init__(self, config):
+        """
+
+        :param config:
+        """
+
+        # Initialize base class
+        super().__init__(config)
+
+        # Regularization
+        self.l2_reg = config['L2_REG']
+
+        # Replay memory
+        self.replay_memory = deque(maxlen=config['REPLAY_MEMORY_SIZE'])
+
+        # Network configuration
+        self.layers = config['LAYER_SIZES']
+        self.batch_size = config['BATCH_SIZE']
+
+        # Build Q-networks
+        self.q_network = self.build_network()
+        self.q_network_next = self.build_network()
+
+        # Build target network
+        self.target_network = self.build_network()
+
+    def build_network(self):
+        """
+
+        :return:
+        """
+        network = Sequential()
+        network.add(Dense(self.layers[0], input_shape=self.env.observation_space.shape, activation='relu',
+                          kernel_regularizer=l2(self.l2_reg)))
+        network.add(Dense(self.layers[1], activation='relu', kernel_regularizer=l2(self.l2_reg)))
+        network.add(Dense(self.layers[2], activation='relu', kernel_regularizer=l2(self.l2_reg)))
+        network.add(Dense(self.env.action_space.n, activation='linear', kernel_regularizer=l2(self.l2_reg)))
+        network.compile(loss='mse', optimizer=Adam(lr=self.alpha_end, decay=self.alpha_decay))
+
+        return network
+
+    def act(self, state, epsilon):
+        """
+
+        :param state:
+        :param epsilon:
+        :return:
+        """
+
+        if self.prng.random_sample() < epsilon:
+            return self.prng.randint(self.env.action_space.n)
+        else:
+            return np.argmax(self.q_network.predict(state))
+
+    def remember(self, done, state, action, reward, state_):
+        """
+
+        :param done:
+        :param state:
+        :param action:
+        :param reward:
+        :param state_:
+        :return:
+        """
+        pass
+
+    def replay(self):
+        """
+
+        :return:
+        """
+        pass
+
+    def do_episode(self, config, episode):
+        """
+
+        :param config:
+        :param episode:
+        :return:
+        """
+
+        # Initial values
+        done = False
+        score_e = 0
+        t_e = 0
+
+        # Get learning parameters
+        epsilon = self.get_epsilon(episode)
+
+        # Get current state s
+        state = self.env.reset()  # TODO: preprocess state?
+
+        # Continue while not crashed
+        while not done:
+
+            # Show on screen
+            if config['RENDER']:
+                self.env.render()
+
+            # Act based on current state s
+            action = self.act(state, epsilon)
+            state_, reward, done, _ = self.env.step(action)  # TODO: preprocess state?
+
+            # Add to memory
+            self.remember(done, state, action, reward, state_)
+
+            # Set next state to current
+            state = state_
+
+            # Increment score and time for this episode
+            score_e += reward
+            t_e += 1
+
+        # Append score
+        self.score.append(score_e)
+        self.score_100.append(score_e)
+        mean_score = np.mean(self.score_100)
+
+        # Replay
+        self.replay()  # TODO: here or each step? (heerad)
+
+        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')

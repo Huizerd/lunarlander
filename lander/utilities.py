@@ -3,13 +3,34 @@ Contains utilities.
 @author: Jesse Hagenaars
 """
 
+import pickle
+
+import gym
 import matplotlib.pyplot as plt
 from bottleneck import move_mean
+from gym.wrappers import Monitor
 
 
-def restore_checkpoint():
-    pass
+def restore_checkpoint(config):
+    """
 
+    :param config:
+    :return:
+    """
+
+    # Load checkpoint
+    checkpoint = pickle.load(open(config['CHECKPOINT_DIR'] + 'checkpoint.pickle', 'rb'))
+
+    # Get agent
+    agent = checkpoint['agent']
+
+    # Get env based on env ID saved in agent
+    agent.env = Monitor(gym.make(agent.env_id), directory=config['RECORD_DIR'] + f'run_{agent.run}',
+                        video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
+                        force=True)  # record every nth episode, clear monitor files if present
+    agent.env.seed(agent.seed)
+
+    return agent
 
 def save():
     pass
@@ -32,26 +53,22 @@ def prepare_plots():
 
     # Get figure and subplots
     figure = plt.figure()
-    axes = [figure.add_subplot(311), figure.add_subplot(312), figure.add_subplot(313)]
+    axes = [figure.add_subplot(211), figure.add_subplot(212)]
 
     # Configure subplots
     axes[0].set_ylabel('score')
     axes[0].set_title('Score over episodes')
     axes[1].set_ylabel('score')
     axes[1].set_title('Score moving average over episodes')
-    axes[2].set_xlabel('episode')
-    axes[2].set_ylabel('epsilon')
-    axes[2].set_title('Epsilon for e-greedy over episodes')
 
     # Get lines
     lines = [axes[0].plot([0], color='#008fd5')[0],
-             axes[1].plot([0], color='#008fd5')[0],
-             axes[2].plot([0], color='#fc4f30')[0]]
+             axes[1].plot([0], color='#008fd5')[0]]
 
     return figure, axes, lines
 
 
-def update_plots(figure, axes, lines, episode, score, epsilon):
+def update_plots(figure, axes, lines, episode, score):
     """
 
     :param figure:
@@ -59,7 +76,6 @@ def update_plots(figure, axes, lines, episode, score, epsilon):
     :param lines:
     :param episode:
     :param score:
-    :param epsilon:
     :return:
     """
 
@@ -69,7 +85,6 @@ def update_plots(figure, axes, lines, episode, score, epsilon):
     # Update plot
     lines[0].set_data(range(1, episode + 2), score)
     lines[1].set_data(range(1, episode + 2), score_ma)
-    lines[2].set_data(range(1, episode + 2), epsilon[:episode + 1])
 
     # Rescale axes
     for ax in axes:

@@ -21,7 +21,7 @@ Of course, other configurations can be specified. See `config.yaml.default` for 
 An example configuration, saved under `config.yaml`, would be:
 ```yaml
 # Environment and agent
-ENV_NAME: 'LunarLander-v2'
+ENV_ID: 'LunarLander-v2'
 ENV_SEED: 0
 AGENT: 'sarsa'
 
@@ -29,25 +29,24 @@ AGENT: 'sarsa'
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
 RECORD_DIR: 'record/test/'
-CHECKPOINT_DIR: 'record/test/'
+CHECKPOINT_DIR: ''
 
 # Run config
 EPISODES: 10000
 SAVE_EVERY: 100
-STATE_BINS: [10, 10, 4, 4, 6, 4, 2, 2]  # per state dimension
+STATE_BINS: [2, 4, 2, 2, 2, 2, 2, 2]  # per state dimension
 STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
                [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0]]  # per state dimension
 RENDER: False
 CONTINUE: False
 
-# Learning config
-# Format: start episode, end episode, start value, end value
-# NOTE: linear slope between start and end, then constant
-E_GREEDY: [0, 500, 0.0, 0.9]
-LEARNING_RATE: [0, -1, 0.01, 0.001]  # -1 indicates last episode
-DISCOUNT_RATE: [0, -1, 0.9, 0.9]
-
-
+# Learning parameters
+# Format: start value, end value, # of episodes, decay factor
+# NOTE: linear slope between start and end, then exponential decay
+# NOTE: use 0 as # of episodes to do only exponential decay
+E_GREEDY: [1.0, 0.05, 500, 0.97]
+LEARNING_RATE: [0.1, 0.001, 1000, 1]  # -1 indicates last episode
+DISCOUNT_RATE: 0.99
 ```
 
 Which would then be called like this:
@@ -59,6 +58,7 @@ $ python -m lander -c config.yaml
 As of now, the available agents are:
 - Random
 - Sarsa
+- Q-learning
 
 ## Environment
 Additional information about the environment can be found on the environment's [webpage](https://gym.openai.com/envs/LunarLander-v2/), or in the [source code](https://github.com/openai/gym/blob/master/gym/envs/box2d/lunar_lander.py).
