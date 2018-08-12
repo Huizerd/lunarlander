@@ -111,5 +111,5 @@ train/
 test/
 record/
 
-# Config file
-config.yaml
+# Config files
+*.yaml

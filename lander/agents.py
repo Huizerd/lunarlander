@@ -90,7 +90,7 @@ class Agent:
         """
 
         # Select best/random action based on e-greedy policy
-        if np.random.rand() < self.epsilon[episode]:
+        if np.random.random() < self.epsilon[episode]:
             # Flatten state to get list index
             flat_state = self.flatten_state(state)
 
@@ -138,7 +138,8 @@ class Agent:
         pairs = list(zip(state, self.discretized_state))
 
         # Discretize state
-        discrete_state = [np.digitize(*pair) for pair in pairs]
+        # Account for zero-length bins: if we want to neglect state dimensions
+        discrete_state = [np.digitize(*pair).item() if pair[1].size else 0 for pair in pairs]
 
         # Multiply all bin indices + 1 to get the 1D index, then subtract 1 to account for 0-indexed lists
         flat_state = reduce(lambda x, y: x * y, [d + 1 for d in discrete_state]) - 1
@@ -208,6 +209,51 @@ class SarsaAgent(Agent):
         # Check if state is terminal, and get next Q(s', a')
         if not crashed:
             q_ = r_ + self.gamma[episode] * self.q_table[flat_s_, a_]
+        else:
+            q_ = r_
+
+        # Update current Q(s, a)
+        self.q_table[flat_s, a] += self.lr[episode] * (q_ - q)
+
+
+class QAgent(Agent):
+    """
+    Agent that makes use of Q-learning (off-policy TD control).
+    """
+
+    def __init__(self, state_space, action_space, episodes, config=None):
+        """
+
+        :param state_space:
+        :param action_space:
+        :param episodes:
+        :param config:
+        """
+        super().__init__(state_space, action_space, episodes, config)
+
+    def learn(self, episode, crashed, s, a, r_, s_, a_=None):
+        """
+
+        :param episode: Current episode
+        :param crashed: Whether the lander has crashed or not
+        :param s: Tuple containing current state
+        :param a: Integer representing current action
+        :param r_: Next reward
+        :param s_: Tuple containing next state
+        :param a_: Integer representing next action (not used)
+        :return:
+        """
+
+        # Flatten current state s and next state s'
+        flat_s = self.flatten_state(s)
+        flat_s_ = self.flatten_state(s_)
+
+        # Get current Q(s, a)
+        q = self.q_table[flat_s, a]
+
+        # Check if state is terminal, and get next Q(s', a')
+        if not crashed:
+            q_ = r_ + self.gamma[episode] * max(self.q_table[flat_s_, :])
         else:
             q_ = r_
 

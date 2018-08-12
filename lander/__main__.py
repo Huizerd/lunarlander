@@ -9,12 +9,13 @@ Runs the lander agent.
 import argparse
 import os
 import pickle
+from collections import deque
 
 import gym
 import yaml
 from gym import logger, wrappers
 
-from .agents import RandomAgent, SarsaAgent
+from .agents import RandomAgent, SarsaAgent, QAgent
 from .utilities import prepare_plots, update_plots
 
 
@@ -51,7 +52,7 @@ def main(config):
         # Start from scratch
         episode_start = 0
         episode_count = config['EPISODES']
-        score = []
+        score = deque(maxlen=episode_count)  # list-like container with fast append and pop
         state_bins = config['STATE_BINS']
         run = 1
 
@@ -69,6 +70,8 @@ def main(config):
             agent = RandomAgent(env.observation_space, env.action_space, episode_count)
         elif config['AGENT'] == 'sarsa':
             agent = SarsaAgent(env.observation_space, env.action_space, episode_count, config)
+        elif config['AGENT'] == 'qlearn':
+            agent = QAgent(env.observation_space, env.action_space, episode_count, config)
         else:
             raise ValueError('Invalid agent specified!')
 
@@ -85,9 +88,12 @@ def main(config):
         score_e = 0
         t = 0
 
-        # Initial action
+        # Initial action (only for Sarsa)
         # Action vector: do nothing, fire left, fire main, fire right
-        action = agent.act(state, e)
+        if config['AGENT'] == 'sarsa':
+            action = agent.act(state, e)
+        else:
+            action = None
 
         # Continue while not crashed
         while not crashed:
@@ -96,11 +102,16 @@ def main(config):
             if config['RENDER']:
                 env.render()
 
-            # Get next state and reward
-            state_, reward_, crashed, _ = env.step(action)
-
-            # Act
-            action_ = agent.act(state_, e)
+            # Get next state and reward (only for Sarsa)
+            if config['AGENT'] == 'sarsa':
+                # Sarsa: get next state s' and reward, act based on s'
+                state_, reward_, crashed, _ = env.step(action)
+                action_ = agent.act(state_, e)
+            else:
+                # Q-learning: act based on current state s
+                action = agent.act(state, e)
+                action_ = None
+                state_, reward_, crashed, _ = env.step(action)
 
             # Learn
             agent.learn(e, crashed, state, action, reward_, state_, action_)
