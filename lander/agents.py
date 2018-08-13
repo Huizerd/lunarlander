@@ -4,11 +4,7 @@ Contains the agents that can be used.
 """
 
 import pickle
-import random
-
-random.seed(0)  # TODO: fix this as well
 from collections import deque
-from copy import deepcopy
 
 import gym
 import numpy as np
@@ -32,16 +28,16 @@ class RandomAgent:
         """
 
         # Running configuration
-        self.episode_start = 0
+        self.step = 0
+        self.episode = 0
         self.episode_count = config['EPISODES']
-        self.run = 1
 
         # Env
         self.env_id = config['ENV_ID']
         self.env_seed = config['ENV_SEED']
-        self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'] + f'run_{self.run}',
+        self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'],
                            video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
-                           force=True)  # record every nth episode, clear monitor files if present
+                           force=True, uid=config['AGENT'])  # record every nth episode, clear monitor files if present
         self.env.seed(self.env_seed)
 
         # Get random number generator
@@ -60,21 +56,20 @@ class RandomAgent:
         """
         return self.prng.randint(self.env.action_space.n)
 
-    def do_episode(self, config, episode):
+    def do_episode(self, config):
         """
 
         :param config:
-        :param episode:
         :return:
         """
-
-        # Reset environment
-        self.env.reset()
 
         # Initial values
         done = False
         score_e = 0
-        t_e = 0
+        step_e = 0
+
+        # Reset environment
+        self.env.reset()
 
         # Continue while not crashed
         while not done:
@@ -87,22 +82,26 @@ class RandomAgent:
             action = self.act()
             _, reward, done, _ = self.env.step(action)
 
-            # Increment score and time for this episode
+            # Increment score and steps
             score_e += reward
-            t_e += 1
+            step_e += 1
+            self.step += 1
 
         # Append score
         self.score.append(score_e)
         self.score_100.append(score_e)
         mean_score = np.mean(self.score_100)
 
-        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+        # Increment episode
+        self.episode += 1
 
-    def save_checkpoint(self, config, episode):
+        logger.info(
+            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+
+    def save_checkpoint(self, config):
         """
 
         :param config:
-        :param episode:
         :return:
         """
 
@@ -110,15 +109,8 @@ class RandomAgent:
         dummy_env = self.env
         self.env = None
 
-        # Create copy
-        agent_copy = deepcopy(self)
-
-        # Increment to not do the same thing twice
-        agent_copy.run += 1
-        agent_copy.episode_start = episode + 1
-
         # Save checkpoint
-        pickle.dump(agent_copy, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
+        pickle.dump(self, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
 
         # Put env back
         self.env = dummy_env
@@ -212,22 +204,20 @@ class SarsaAgent(RandomAgent):
         # Update current Q(s, a)
         self.q_table[state][action] += alpha * (q_value_ - q_value)
 
-    def do_episode(self, config, episode):
+    def do_episode(self, config):
         """
 
         :param config:
-        :param episode:
         :return:
         """
 
         # Initial values
         done = False
         score_e = 0
-        t_e = 0
+        step_e = 0
 
-        # Get learning parameters
-        alpha = self.get_alpha(episode)
-        epsilon = self.get_epsilon(episode)
+        # Get epsilon for initial state
+        epsilon = self.get_epsilon()
 
         # Get current state s, act based on s
         state = self.discretize_state(self.env.reset())
@@ -239,6 +229,10 @@ class SarsaAgent(RandomAgent):
             # Show on screen
             if config['RENDER']:
                 self.env.render()
+
+            # Update for other steps
+            alpha = self.get_alpha()
+            epsilon = self.get_epsilon()
 
             # Get next state s' and reward, act based on s'
             state_, reward, done, _ = self.env.step(action)
@@ -252,44 +246,47 @@ class SarsaAgent(RandomAgent):
             state = state_
             action = action_
 
-            # Increment score and time for this episode
+            # Increment score and steps
             score_e += reward
-            t_e += 1
+            step_e += 1
+            self.step += 1
 
         # Append score
         self.score.append(score_e)
         self.score_100.append(score_e)
         mean_score = np.mean(self.score_100)
 
-        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+        # Increment episode
+        self.episode += 1
 
-    def get_alpha(self, episode):
+        logger.info(
+            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+
+    def get_alpha(self):
         """
 
-        :param episode:
         :return:
         """
 
         # Linear decay, then exponential decay
-        if episode <= self.alpha_steps and self.alpha_steps > 0:
-            alpha = self.alpha_start - episode * (self.alpha_start - self.alpha_end) / self.alpha_steps
+        if self.step <= self.alpha_steps and self.alpha_steps > 0:
+            alpha = self.alpha_start - self.step * (self.alpha_start - self.alpha_end) / self.alpha_steps
         else:
-            alpha = self.alpha_end * self.alpha_decay ** (episode - self.alpha_steps)
+            alpha = self.alpha_end * self.alpha_decay ** (self.step - self.alpha_steps)
 
         return alpha
 
-    def get_epsilon(self, episode):
+    def get_epsilon(self):
         """
 
-        :param episode:
         :return:
         """
 
         # Linear decay, then exponential decay
-        if episode <= self.epsilon_steps and self.epsilon_steps > 0:
-            epsilon = self.epsilon_start - episode * (self.epsilon_start - self.epsilon_end) / self.epsilon_steps
+        if self.step <= self.epsilon_steps and self.epsilon_steps > 0:
+            epsilon = self.epsilon_start - self.step * (self.epsilon_start - self.epsilon_end) / self.epsilon_steps
         else:
-            epsilon = self.epsilon_end * self.epsilon_decay ** (episode - self.epsilon_steps)
+            epsilon = self.epsilon_end * self.epsilon_decay ** (self.step - self.epsilon_steps)
 
         return epsilon
 
@@ -331,22 +328,17 @@ class QAgent(SarsaAgent):
         # Update current Q(s, a)
         self.q_table[state][action] += alpha * (q_value_ - q_value)
 
-    def do_episode(self, config, episode):
+    def do_episode(self, config):
         """
 
         :param config:
-        :param episode:
         :return:
         """
 
         # Initial values
         done = False
         score_e = 0
-        t_e = 0
-
-        # Get learning parameters
-        alpha = self.get_alpha(episode)
-        epsilon = self.get_epsilon(episode)
+        step_e = 0
 
         # Get current state s
         state = self.discretize_state(self.env.reset())
@@ -357,6 +349,10 @@ class QAgent(SarsaAgent):
             # Show on screen
             if config['RENDER']:
                 self.env.render()
+
+            # Get learning parameters
+            alpha = self.get_alpha()
+            epsilon = self.get_epsilon()
 
             # Act based on current state s
             action = self.act(state, epsilon)
@@ -369,19 +365,24 @@ class QAgent(SarsaAgent):
             # Set next state to current
             state = state_
 
-            # Increment score and time for this episode
+            # Increment score and steps
             score_e += reward
-            t_e += 1
+            step_e += 1
+            self.step += 1
 
         # Append score
         self.score.append(score_e)
         self.score_100.append(score_e)
         mean_score = np.mean(self.score_100)
 
-        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+        # Increment episode
+        self.episode += 1
+
+        logger.info(
+            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
 
 
-class DeepQAgent(QAgent):
+class DoubleDQNAgent(QAgent):
     """
     Agent that makes use of Deep Q-learning, where Q(s, a) is approximated using a neural network.
     """
@@ -405,9 +406,8 @@ class DeepQAgent(QAgent):
         self.layers = config['LAYER_SIZES']
         self.batch_size = config['BATCH_SIZE']
 
-        # Build Q-networks
+        # Build Q-network
         self.q_network = self.build_network()
-        self.q_network_next = self.build_network()
 
         # Build target network and initialize to weights of Q-network
         self.target_network = self.build_network()
@@ -446,7 +446,7 @@ class DeepQAgent(QAgent):
         if self.prng.random_sample() < epsilon:
             return self.prng.randint(self.env.action_space.n)
         else:
-            return np.argmax(self.q_network.predict(state))  # TODO: need to select [0] first?
+            return np.argmax(self.q_network.predict(state))
 
     def remember(self, done, state, action, reward, state_):
         """
@@ -468,25 +468,24 @@ class DeepQAgent(QAgent):
 
         # Create minibatch
         x_batch, y_batch = [], []
-        # TODO: fix this!
-        # minibatch = self.prng.choice(self.replay_memory, min(len(self.replay_memory), self.batch_size))
-        minibatch = random.sample(self.replay_memory, min(len(self.replay_memory), self.batch_size))
+        sample = self.prng.randint(len(self.replay_memory), size=self.batch_size)
+        minibatch = [self.replay_memory[i] for i in sample]
 
         # Get input and target
         for done, state, action, reward, state_ in minibatch:
-            y_target = self.q_network.predict(state)
-            y_target_ = self.q_network.predict(state_)
-            y_target_val_ = self.target_network.predict(state_)
+            y_current = self.q_network.predict(state)
+            y_current_ = self.q_network.predict(state_)
+            y_target_ = self.target_network.predict(state_)
 
             # Check if next state is terminal, update
             if done:
-                y_target[0][action] = reward
+                y_current[0][action] = reward
             else:
-                y_target[0][action] = reward + self.gamma * y_target_val_[0][np.argmax(y_target_[0])]
+                y_current[0][action] = reward + self.gamma * y_target_[0][np.argmax(y_current_[0])]
 
             # Append to training batch
             x_batch.append(state[0])
-            y_batch.append(y_target[0])
+            y_batch.append(y_current[0])
 
         # Train
         self.q_network.fit(np.array(x_batch), np.array(y_batch), batch_size=self.batch_size, epochs=1, verbose=0)
@@ -499,21 +498,17 @@ class DeepQAgent(QAgent):
         """
         return np.reshape(state, (1,) + self.env.observation_space.shape)
 
-    def do_episode(self, config, episode):
+    def do_episode(self, config):
         """
 
         :param config:
-        :param episode:
         :return:
         """
 
         # Initial values
         done = False
         score_e = 0
-        t_e = 0
-
-        # Get learning parameters
-        epsilon = self.get_epsilon(episode)
+        step_e = 0
 
         # Get current state s
         state = self.preprocess_state(self.env.reset())
@@ -525,6 +520,9 @@ class DeepQAgent(QAgent):
             if config['RENDER']:
                 self.env.render()
 
+            # Get learning parameters
+            epsilon = self.get_epsilon()
+
             # Act based on current state s
             action = self.act(state, epsilon)
             state_, reward, done, _ = self.env.step(action)
@@ -534,21 +532,52 @@ class DeepQAgent(QAgent):
             self.remember(done, state, action, reward, state_)
 
             # Train
-            self.train()
+            if len(self.replay_memory) > self.batch_size:
+                self.train()
+
+            # Set weights of target network to Q-network
+            if self.step % config['UPDATE_EVERY'] == 0:
+                self.update_target_network()
 
             # Set next state to current
             state = state_
 
-            # Increment score and time for this episode
+            # Increment score and steps
             score_e += reward
-            t_e += 1
+            step_e += 1
+            self.step += 1
 
         # Append score
         self.score.append(score_e)
         self.score_100.append(score_e)
         mean_score = np.mean(self.score_100)
 
-        # Set weights of target network to Q-network
-        self.update_target_network()
+        # Increment episode
+        self.episode += 1
 
-        logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
+        logger.info(
+            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+
+    def save_checkpoint(self, config):
+        """
+
+        :param config:
+        :return:
+        """
+
+        # Save networks
+        self.q_network.save(config['RECORD_DIR'] + 'q_network.h5')
+        self.target_network.save(config['RECORD_DIR'] + 'target_network.h5')
+
+        # Networks can't be pickled
+        dummy_q_network = self.q_network
+        dummy_target_network = self.target_network
+        self.q_network = None
+        self.target_network = None
+
+        # Execute save function of base class
+        super().save_checkpoint(config)
+
+        # Put networks back
+        self.q_network = dummy_q_network
+        self.target_network = dummy_target_network

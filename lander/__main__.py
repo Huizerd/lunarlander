@@ -9,7 +9,7 @@ import os
 import yaml
 from gym import logger
 
-from .agents import RandomAgent, SarsaAgent, QAgent, DeepQAgent
+from .agents import RandomAgent, SarsaAgent, QAgent, DoubleDQNAgent
 from .utilities import prepare_plots, update_plots, restore_checkpoint
 
 
@@ -31,8 +31,8 @@ def main(config):
             agent = SarsaAgent(config)
         elif config['AGENT'] == 'qlearn':
             agent = QAgent(config)
-        elif config['AGENT'] == 'deepq':
-            agent = DeepQAgent(config)
+        elif config['AGENT'] == 'doubledqn':
+            agent = DoubleDQNAgent(config)
         else:
             raise ValueError('Invalid agent specified!')
 
@@ -40,17 +40,17 @@ def main(config):
     figure, axes, lines = prepare_plots()
 
     # Start
-    for e in range(agent.episode_start, agent.episode_count):
+    while agent.episode < agent.episode_count:
 
         # Do episode
-        agent.do_episode(config, e)
+        agent.do_episode(config)
 
         # Update plots
-        figure = update_plots(figure, axes, lines, e, agent.score)
+        figure = update_plots(figure, axes, lines, agent.episode, agent.score)
 
         # Save every nth episode
-        if (e + 1) % config['SAVE_EVERY'] == 0:
-            agent.save_checkpoint(config, e)
+        if (agent.episode) % config['SAVE_EVERY'] == 0:
+            agent.save_checkpoint(config)
             figure.savefig(config['RECORD_DIR'] + 'score.pdf')
 
     # Close environment
