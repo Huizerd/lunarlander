@@ -9,7 +9,7 @@ import os
 import yaml
 from gym import logger
 
-from .agents import RandomAgent, SarsaAgent, QAgent
+from .agents import RandomAgent, SarsaAgent, QAgent, DeepQAgent
 from .utilities import prepare_plots, update_plots, restore_checkpoint
 
 
@@ -31,6 +31,8 @@ def main(config):
             agent = SarsaAgent(config)
         elif config['AGENT'] == 'qlearn':
             agent = QAgent(config)
+        elif config['AGENT'] == 'deepq':
+            agent = DeepQAgent(config)
         else:
             raise ValueError('Invalid agent specified!')
 

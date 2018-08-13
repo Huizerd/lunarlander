@@ -45,7 +45,7 @@ CONTINUE: False
 # NOTE: linear slope between start and end, then exponential decay
 # NOTE: use 0 as # of episodes to do only exponential decay
 E_GREEDY: [1.0, 0.05, 500, 0.97]
-LEARNING_RATE: [0.1, 0.001, 1000, 1]  # -1 indicates last episode
+LEARNING_RATE: [0.1, 0.001, 1000, 1]
 DISCOUNT_RATE: 0.99
 ```
 

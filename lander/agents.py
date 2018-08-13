@@ -4,6 +4,9 @@ Contains the agents that can be used.
 """
 
 import pickle
+import random
+
+random.seed(0)  # TODO: fix this as well
 from collections import deque
 from copy import deepcopy
 
@@ -139,11 +142,19 @@ class SarsaAgent(RandomAgent):
         self.state_bounds = config['STATE_BOUNDS']
         self.state_bins = tuple(config['STATE_BINS'])
 
+        # Float conversion
+        for i, lr in enumerate(config['LEARNING_RATE']):
+            if type(lr) is str:
+                config['LEARNING_RATE'][i] = float(lr)
+        for i, eps in enumerate(config['E_GREEDY']):
+            if type(eps) is str:
+                config['E_GREEDY'][i] = float(eps)
+
         # Learning parameters
         # First linear decay, then exponential decay
         self.alpha_start, self.alpha_end, self.alpha_steps, self.alpha_decay = config['LEARNING_RATE']
         self.epsilon_start, self.epsilon_end, self.epsilon_steps, self.epsilon_decay = config['E_GREEDY']
-        self.gamma = config['DISCOUNT_RATE']
+        self.gamma = float(config['DISCOUNT_RATE'])
 
         # Q-table
         self.q_table = self.prng.uniform(low=-1.0, high=1.0, size=self.state_bins + (self.env.action_space.n,))
@@ -176,30 +187,30 @@ class SarsaAgent(RandomAgent):
 
         return tuple(state_d)
 
-    def learn(self, done, alpha, s, a, r, s_, a_):
+    def learn(self, done, alpha, state, action, reward, state_, action_):
         """
 
         :param done:
         :param alpha:
-        :param s:
-        :param a:
-        :param r:
-        :param s_:
-        :param a_:
+        :param state:
+        :param action:
+        :param reward:
+        :param state_:
+        :param action_:
         :return:
         """
 
         # Get current Q(s, a)
-        q = self.q_table[s][a]
+        q_value = self.q_table[state][action]
 
         # Check if next state is terminal, get next Q(s', a')
         if not done:
-            q_ = r + self.gamma * self.q_table[s_][a_]
+            q_value_ = reward + self.gamma * self.q_table[state_][action_]
         else:
-            q_ = r
+            q_value_ = reward
 
         # Update current Q(s, a)
-        self.q_table[s][a] += alpha * (q_ - q)
+        self.q_table[state][action] += alpha * (q_value_ - q_value)
 
     def do_episode(self, config, episode):
         """
@@ -295,30 +306,30 @@ class QAgent(SarsaAgent):
         """
         super().__init__(config)
 
-    def learn(self, done, alpha, s, a, r, s_, a_=None):
+    def learn(self, done, alpha, state, action, reward, state_, action_=None):
         """
 
         :param done:
         :param alpha:
-        :param s:
-        :param a:
-        :param r:
-        :param s_:
-        :param a_:
+        :param state:
+        :param action:
+        :param reward:
+        :param state_:
+        :param action_:
         :return:
         """
 
         # Get current Q(s, a)
-        q = self.q_table[s][a]
+        q_value = self.q_table[state][action]
 
         # Check if next state is terminal, get next maximum Q-value
         if not done:
-            q_ = r + self.gamma * max(self.q_table[s_])
+            q_value_ = reward + self.gamma * max(self.q_table[state_])
         else:
-            q_ = r
+            q_value_ = reward
 
         # Update current Q(s, a)
-        self.q_table[s][a] += alpha * (q_ - q)
+        self.q_table[state][action] += alpha * (q_value_ - q_value)
 
     def do_episode(self, config, episode):
         """
@@ -385,10 +396,10 @@ class DeepQAgent(QAgent):
         super().__init__(config)
 
         # Regularization
-        self.l2_reg = config['L2_REG']
+        self.l2_reg = float(config['L2_REG'])
 
         # Replay memory
-        self.replay_memory = deque(maxlen=config['REPLAY_MEMORY_SIZE'])
+        self.replay_memory = deque(maxlen=int(float(config['REPLAY_MEMORY_SIZE'])))
 
         # Network configuration
         self.layers = config['LAYER_SIZES']
@@ -398,8 +409,9 @@ class DeepQAgent(QAgent):
         self.q_network = self.build_network()
         self.q_network_next = self.build_network()
 
-        # Build target network
+        # Build target network and initialize to weights of Q-network
         self.target_network = self.build_network()
+        self.update_target_network()
 
     def build_network(self):
         """
@@ -416,6 +428,13 @@ class DeepQAgent(QAgent):
 
         return network
 
+    def update_target_network(self):
+        """
+
+        :return:
+        """
+        self.target_network.set_weights(self.q_network.get_weights())
+
     def act(self, state, epsilon):
         """
 
@@ -427,7 +446,7 @@ class DeepQAgent(QAgent):
         if self.prng.random_sample() < epsilon:
             return self.prng.randint(self.env.action_space.n)
         else:
-            return np.argmax(self.q_network.predict(state))
+            return np.argmax(self.q_network.predict(state))  # TODO: need to select [0] first?
 
     def remember(self, done, state, action, reward, state_):
         """
@@ -439,14 +458,46 @@ class DeepQAgent(QAgent):
         :param state_:
         :return:
         """
-        pass
+        self.replay_memory.append((done, state, action, reward, state_))
 
-    def replay(self):
+    def train(self):
         """
 
         :return:
         """
-        pass
+
+        # Create minibatch
+        x_batch, y_batch = [], []
+        # TODO: fix this!
+        # minibatch = self.prng.choice(self.replay_memory, min(len(self.replay_memory), self.batch_size))
+        minibatch = random.sample(self.replay_memory, min(len(self.replay_memory), self.batch_size))
+
+        # Get input and target
+        for done, state, action, reward, state_ in minibatch:
+            y_target = self.q_network.predict(state)
+            y_target_ = self.q_network.predict(state_)
+            y_target_val_ = self.target_network.predict(state_)
+
+            # Check if next state is terminal, update
+            if done:
+                y_target[0][action] = reward
+            else:
+                y_target[0][action] = reward + self.gamma * y_target_val_[0][np.argmax(y_target_[0])]
+
+            # Append to training batch
+            x_batch.append(state[0])
+            y_batch.append(y_target[0])
+
+        # Train
+        self.q_network.fit(np.array(x_batch), np.array(y_batch), batch_size=self.batch_size, epochs=1, verbose=0)
+
+    def preprocess_state(self, state):
+        """
+
+        :param state:
+        :return:
+        """
+        return np.reshape(state, (1,) + self.env.observation_space.shape)
 
     def do_episode(self, config, episode):
         """
@@ -465,7 +516,7 @@ class DeepQAgent(QAgent):
         epsilon = self.get_epsilon(episode)
 
         # Get current state s
-        state = self.env.reset()  # TODO: preprocess state?
+        state = self.preprocess_state(self.env.reset())
 
         # Continue while not crashed
         while not done:
@@ -476,10 +527,14 @@ class DeepQAgent(QAgent):
 
             # Act based on current state s
             action = self.act(state, epsilon)
-            state_, reward, done, _ = self.env.step(action)  # TODO: preprocess state?
+            state_, reward, done, _ = self.env.step(action)
+            state_ = self.preprocess_state(state_)
 
             # Add to memory
             self.remember(done, state, action, reward, state_)
+
+            # Train
+            self.train()
 
             # Set next state to current
             state = state_
@@ -493,7 +548,7 @@ class DeepQAgent(QAgent):
         self.score_100.append(score_e)
         mean_score = np.mean(self.score_100)
 
-        # Replay
-        self.replay()  # TODO: here or each step? (heerad)
+        # Set weights of target network to Q-network
+        self.update_target_network()
 
         logger.info(f'[Episode {episode + 1}] - score: {score_e}, time: {t_e + 1}, mean score (100 ep.): {mean_score}.')
