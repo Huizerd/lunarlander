@@ -9,8 +9,9 @@ import gym
 import matplotlib.pyplot as plt
 from bottleneck import move_mean
 from gym.wrappers import Monitor
-from keras.models import load_model
 
+
+# TODO: make restore working for double DQN (including TF random seed)
 
 def restore_checkpoint(config):
     """
@@ -23,32 +24,17 @@ def restore_checkpoint(config):
     with open(config['CHECKPOINT_DIR'] + 'checkpoint.pickle', 'rb') as p_file:
         agent = pickle.load(p_file)
 
-    import pdb
-    pdb.set_trace()
+    # Increment run
+    agent.run += 1
 
     # TODO: be able to restore random state of previous environment --> gym issue (pull request?)
-    # TODO: ensure resume works properly (or bring runs back)
     # Get env based on env ID saved in agent
-    agent.env = Monitor(gym.make(agent.env_id), directory=config['RECORD_DIR'],
+    agent.env = Monitor(gym.make(agent.env_id), directory=config['RECORD_DIR'] + f'run_{agent.run}',
                         video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
-                        force=False, resume=True,
-                        uid=config['AGENT'])  # record every nth episode, clear monitor files if present
+                        force=True, uid=config['AGENT'])  # record every nth episode, clear monitor files if present
     agent.env.seed(agent.env_seed)
 
-    # Get networks for DoubleDQN
-    if config['AGENT'] == 'doubledqn':
-        agent.q_network = load_model(config['CHECKPOINT_DIR'] + 'q_network.h5')
-        agent.target_network = load_model(config['CHECKPOINT_DIR'] + 'target_network.h5')
-
     return agent
-
-
-def save():
-    pass
-
-
-def build_z_line():
-    pass
 
 
 def prepare_plots():

@@ -13,8 +13,7 @@ from .agents import RandomAgent, SarsaAgent, QAgent, DoubleDQNAgent
 from .utilities import prepare_plots, update_plots, restore_checkpoint
 
 
-# TODO: check epsilon and alpha for steps (compare to heerad)
-# TODO: linear decay per step, exp. decay per episode
+# TODO: add break when > 200 (and save)
 
 
 def main(config):
@@ -57,8 +56,10 @@ def main(config):
             agent.save_checkpoint(config)
             figure.savefig(config['RECORD_DIR'] + 'score.pdf')
 
-    # Close environment
+    # Close
     agent.env.close()
+    if config['AGENT'] == 'doubledqn':
+        agent.sess.close()
 
 
 if __name__ == '__main__':

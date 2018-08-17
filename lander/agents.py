@@ -5,7 +5,6 @@ Contains the agents that can be used.
 
 import json
 import pickle
-import random
 from collections import deque
 
 import gym
@@ -27,6 +26,7 @@ class RandomAgent:
         """
 
         # Running configuration
+        self.run = 0
         self.step = 0
         self.episode = 0
         self.episode_count = config['EPISODES']
@@ -34,7 +34,7 @@ class RandomAgent:
         # Env
         self.env_id = config['ENV_ID']
         self.env_seed = config['ENV_SEED']
-        self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'],
+        self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'] + f'run_{self.run}',
                            video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
                            force=True, uid=config['AGENT'])  # record every nth episode, clear monitor files if present
         self.env.seed(self.env_seed)
@@ -427,6 +427,10 @@ class DoubleDQNAgent(QAgent):
         self.layers = config['LAYER_SIZES']
         self.batch_size = config['BATCH_SIZE']
 
+        # Set random seed for TF
+        # TODO: is this the correct place for seed?
+        tf.set_random_seed(self.env_seed)
+
         # Also episode as TF variable
         self.tf_episode = tf.get_variable('episode', shape=(), dtype=tf.int32, trainable=False,
                                           initializer=tf.zeros_initializer)
@@ -439,9 +443,8 @@ class DoubleDQNAgent(QAgent):
             # Not actually two different networks, since they both use the same weights
             # NOTE: stop_gradient prevents network from contributing to gradient computation
             self.q_network = self.build_network(self.ph_state,
-                                                # regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
+                                                regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
                                                 trainable=True)  # current state s
-
             self.q_network_ = tf.stop_gradient(self.build_network(self.ph_state_, reuse=True))  # next state s'
 
         # Build target network
@@ -494,7 +497,7 @@ class DoubleDQNAgent(QAgent):
         self.update_target_op = tf.group(*update_target_op, name='update_target')  # * unpacks the list
 
         # Build training op
-        self.training_op = self.train(v_q_network)
+        self.training_op = self.train()
 
     def build_network(self, ph_input, regularizer=None, trainable=False, reuse=False):
         """
@@ -520,13 +523,6 @@ class DoubleDQNAgent(QAgent):
 
         return Q
 
-    # def update_target_network(self):
-    #     """
-    #
-    #     :return:
-    #     """
-    #     self.target_network.set_weights(self.q_network.get_weights())
-
     def act(self, state):
         """
 
@@ -550,9 +546,11 @@ class DoubleDQNAgent(QAgent):
         :param state_:
         :return:
         """
+
+        # Negate done because of the multiplication in the training function
         self.replay_memory.append((0.0 if done else 1.0, state, action, reward, state_))
 
-    def train(self, v_q_network):
+    def train(self):
         """
 
         :return:
@@ -572,27 +570,15 @@ class DoubleDQNAgent(QAgent):
         q_taken = tf.gather_nd(self.q_network, tf.stack((tf.range(self.batch_size), self.ph_action), axis=1))
 
         # Compute loss based on the mean squared error between the two
-        # loss = tf.losses.mean_squared_error(q_target, q_taken)
-        loss = tf.reduce_mean(tf.square(q_target - q_taken))
+        loss = tf.losses.mean_squared_error(q_target, q_taken)
 
-        # Apply L2 regularization
-        # loss += 0.5 * tf.losses.get_regularization_loss()
-        for v in v_q_network:
-            if not 'bias' in v.name:
-                loss += self.l2_reg * 0.5 * tf.nn.l2_loss(v)
+        # Add L2 regularization
+        loss += 0.5 * tf.losses.get_regularization_loss()
 
         # Get train op
         train_op = tf.train.AdamOptimizer(self.alpha * self.alpha_decay ** self.episode).minimize(loss)
 
         return train_op
-
-    # def preprocess_state(self, state):
-    #     """
-    #
-    #     :param state:
-    #     :return:
-    #     """
-    #     return np.reshape(state, (1,) + self.env.observation_space.shape)
 
     def get_batch(self):
         """
@@ -647,8 +633,7 @@ class DoubleDQNAgent(QAgent):
 
             # Train
             if len(self.replay_memory) >= self.batch_size:
-                # minibatch = self.get_batch()
-                minibatch = random.sample(self.replay_memory, self.batch_size)
+                minibatch = self.get_batch()
                 self.sess.run(self.training_op,
                               feed_dict={ph: data for ph, data in zip(self.ph_list, map(list, zip(*minibatch)))})
 
@@ -679,19 +664,10 @@ class DoubleDQNAgent(QAgent):
         :return:
         """
 
-        # Save networks
-        self.q_network.save(config['RECORD_DIR'] + 'q_network.h5')
-        self.target_network.save(config['RECORD_DIR'] + 'target_network.h5')
+        # Saver and save
+        saver = tf.train.Saver()
+        saver.save(self.sess, config['RECORD_DIR'] + 'model')
 
-        # Networks can't be pickled
-        dummy_q_network = self.q_network
-        dummy_target_network = self.target_network
-        self.q_network = None
-        self.target_network = None
-
+        # TODO: fix saving for TF!
         # Execute save function of base class
-        super().save_checkpoint(config)
-
-        # Put networks back
-        self.q_network = dummy_q_network
-        self.target_network = dummy_target_network
+        # super().save_checkpoint(config)
