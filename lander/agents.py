@@ -3,6 +3,7 @@ Contains the agents that can be used.
 @author: Jesse Hagenaars
 """
 
+import json
 import pickle
 from collections import deque
 
@@ -10,6 +11,7 @@ import gym
 import numpy as np
 from gym import logger
 from gym.wrappers import Monitor
+from keras.initializers import glorot_uniform
 from keras.layers import Dense
 from keras.models import Sequential
 from keras.optimizers import Adam
@@ -95,8 +97,7 @@ class RandomAgent:
         # Increment episode
         self.episode += 1
 
-        logger.info(
-            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, 100-score: {mean_score:.2f}.')
 
     def save_checkpoint(self, config):
         """
@@ -110,7 +111,12 @@ class RandomAgent:
         self.env = None
 
         # Save checkpoint
-        pickle.dump(self, open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb'))
+        with open(config['RECORD_DIR'] + 'checkpoint.pickle', 'wb') as p_file:
+            pickle.dump(self, p_file)
+
+        # Save config
+        with open(config['RECORD_DIR'] + 'config.json', 'w') as c_file:
+            json.dump(config, c_file, sort_keys=True, indent=4)
 
         # Put env back
         self.env = dummy_env
@@ -146,20 +152,20 @@ class SarsaAgent(RandomAgent):
         # First linear decay, then exponential decay
         self.alpha_start, self.alpha_end, self.alpha_steps, self.alpha_decay = config['LEARNING_RATE']
         self.epsilon_start, self.epsilon_end, self.epsilon_steps, self.epsilon_decay = config['E_GREEDY']
+        self.alpha, self.epsilon = None, None
         self.gamma = float(config['DISCOUNT_RATE'])
 
         # Q-table
         self.q_table = self.prng.uniform(low=-1.0, high=1.0, size=self.state_bins + (self.env.action_space.n,))
 
-    def act(self, state, epsilon):
+    def act(self, state):
         """
 
         :param state:
-        :param epsilon:
         :return:
         """
 
-        if self.prng.random_sample() < epsilon:
+        if self.prng.random_sample() < self.epsilon:
             return self.prng.randint(self.env.action_space.n)
         else:
             return np.argmax(self.q_table[state])
@@ -179,11 +185,10 @@ class SarsaAgent(RandomAgent):
 
         return tuple(state_d)
 
-    def learn(self, done, alpha, state, action, reward, state_, action_):
+    def learn(self, done, state, action, reward, state_, action_):
         """
 
         :param done:
-        :param alpha:
         :param state:
         :param action:
         :param reward:
@@ -202,7 +207,7 @@ class SarsaAgent(RandomAgent):
             q_value_ = reward
 
         # Update current Q(s, a)
-        self.q_table[state][action] += alpha * (q_value_ - q_value)
+        self.q_table[state][action] += self.alpha * (q_value_ - q_value)
 
     def do_episode(self, config):
         """
@@ -217,11 +222,15 @@ class SarsaAgent(RandomAgent):
         step_e = 0
 
         # Get epsilon for initial state
-        epsilon = self.get_epsilon()
+        self.update_epsilon_step()
+
+        # Episodic decay (only after linear decay)
+        self.update_alpha_episode()
+        self.update_epsilon_episode()
 
         # Get current state s, act based on s
         state = self.discretize_state(self.env.reset())
-        action = self.act(state, epsilon)
+        action = self.act(state)
 
         # Continue while not crashed
         while not done:
@@ -231,16 +240,16 @@ class SarsaAgent(RandomAgent):
                 self.env.render()
 
             # Update for other steps
-            alpha = self.get_alpha()
-            epsilon = self.get_epsilon()
+            self.update_alpha_step()
+            self.update_epsilon_step()
 
             # Get next state s' and reward, act based on s'
             state_, reward, done, _ = self.env.step(action)
             state_ = self.discretize_state(state_)
-            action_ = self.act(state_, epsilon)
+            action_ = self.act(state_)
 
             # Learn
-            self.learn(done, alpha, state, action, reward, state_, action_)
+            self.learn(done, state, action, reward, state_, action_)
 
             # Set next state and action to current
             state = state_
@@ -259,36 +268,48 @@ class SarsaAgent(RandomAgent):
         # Increment episode
         self.episode += 1
 
-        logger.info(
-            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
+                    f'a: {self.alpha:.4f}, 100-score: {mean_score:.2f}.')
 
-    def get_alpha(self):
+    def update_alpha_step(self):
         """
 
         :return:
         """
 
-        # Linear decay, then exponential decay
+        # Linear decay
         if self.step <= self.alpha_steps and self.alpha_steps > 0:
-            alpha = self.alpha_start - self.step * (self.alpha_start - self.alpha_end) / self.alpha_steps
-        else:
-            alpha = self.alpha_end * self.alpha_decay ** (self.step - self.alpha_steps)
+            self.alpha = self.alpha_start - self.step * (self.alpha_start - self.alpha_end) / self.alpha_steps
 
-        return alpha
-
-    def get_epsilon(self):
+    def update_epsilon_step(self):
         """
 
         :return:
         """
 
-        # Linear decay, then exponential decay
+        # Linear decay
         if self.step <= self.epsilon_steps and self.epsilon_steps > 0:
-            epsilon = self.epsilon_start - self.step * (self.epsilon_start - self.epsilon_end) / self.epsilon_steps
-        else:
-            epsilon = self.epsilon_end * self.epsilon_decay ** (self.step - self.epsilon_steps)
+            self.epsilon = self.epsilon_start - self.step * (self.epsilon_start - self.epsilon_end) / self.epsilon_steps
 
-        return epsilon
+    def update_alpha_episode(self):
+        """
+
+        :return:
+        """
+
+        # Exponential decay
+        if self.step > self.alpha_steps:
+            self.alpha *= self.alpha_decay
+
+    def update_epsilon_episode(self):
+        """
+
+        :return:
+        """
+
+        # Exponential decay
+        if self.step > self.epsilon_steps:
+            self.epsilon *= self.epsilon_decay
 
 
 class QAgent(SarsaAgent):
@@ -303,11 +324,10 @@ class QAgent(SarsaAgent):
         """
         super().__init__(config)
 
-    def learn(self, done, alpha, state, action, reward, state_, action_=None):
+    def learn(self, done, state, action, reward, state_, action_=None):
         """
 
         :param done:
-        :param alpha:
         :param state:
         :param action:
         :param reward:
@@ -326,7 +346,7 @@ class QAgent(SarsaAgent):
             q_value_ = reward
 
         # Update current Q(s, a)
-        self.q_table[state][action] += alpha * (q_value_ - q_value)
+        self.q_table[state][action] += self.alpha * (q_value_ - q_value)
 
     def do_episode(self, config):
         """
@@ -340,6 +360,10 @@ class QAgent(SarsaAgent):
         score_e = 0
         step_e = 0
 
+        # Episodic decay (only after linear decay)
+        self.update_alpha_episode()
+        self.update_epsilon_episode()
+
         # Get current state s
         state = self.discretize_state(self.env.reset())
 
@@ -351,16 +375,16 @@ class QAgent(SarsaAgent):
                 self.env.render()
 
             # Get learning parameters
-            alpha = self.get_alpha()
-            epsilon = self.get_epsilon()
+            self.update_alpha_step()
+            self.update_epsilon_step()
 
             # Act based on current state s
-            action = self.act(state, epsilon)
+            action = self.act(state)
             state_, reward, done, _ = self.env.step(action)
             state_ = self.discretize_state(state_)
 
             # Learn
-            self.learn(done, alpha, state, action, reward, state_)
+            self.learn(done, state, action, reward, state_)
 
             # Set next state to current
             state = state_
@@ -378,13 +402,13 @@ class QAgent(SarsaAgent):
         # Increment episode
         self.episode += 1
 
-        logger.info(
-            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
+                    f'a: {self.alpha:.4f}, 100-score: {mean_score:.2f}.')
 
 
 class DoubleDQNAgent(QAgent):
     """
-    Agent that makes use of Deep Q-learning, where Q(s, a) is approximated using a neural network.
+    Agent that makes use of double deep Q-learning, where Q(s, a) is approximated using neural networks.
     """
 
     def __init__(self, config):
@@ -418,12 +442,16 @@ class DoubleDQNAgent(QAgent):
 
         :return:
         """
+
         network = Sequential()
         network.add(Dense(self.layers[0], input_shape=self.env.observation_space.shape, activation='relu',
-                          kernel_regularizer=l2(self.l2_reg)))
-        network.add(Dense(self.layers[1], activation='relu', kernel_regularizer=l2(self.l2_reg)))
-        network.add(Dense(self.layers[2], activation='relu', kernel_regularizer=l2(self.l2_reg)))
-        network.add(Dense(self.env.action_space.n, activation='linear', kernel_regularizer=l2(self.l2_reg)))
+                          kernel_regularizer=l2(self.l2_reg), kernel_initializer=glorot_uniform(self.env_seed)))
+        network.add(Dense(self.layers[1], activation='relu', kernel_regularizer=l2(self.l2_reg),
+                          kernel_initializer=glorot_uniform(self.env_seed)))
+        network.add(Dense(self.layers[2], activation='relu', kernel_regularizer=l2(self.l2_reg),
+                          kernel_initializer=glorot_uniform(self.env_seed)))
+        network.add(Dense(self.env.action_space.n, activation='linear', kernel_regularizer=l2(self.l2_reg),
+                          kernel_initializer=glorot_uniform(self.env_seed)))
         network.compile(loss='mse', optimizer=Adam(lr=self.alpha_end, decay=self.alpha_decay))
 
         return network
@@ -435,15 +463,14 @@ class DoubleDQNAgent(QAgent):
         """
         self.target_network.set_weights(self.q_network.get_weights())
 
-    def act(self, state, epsilon):
+    def act(self, state):
         """
 
         :param state:
-        :param epsilon:
         :return:
         """
 
-        if self.prng.random_sample() < epsilon:
+        if self.prng.random_sample() < self.epsilon:
             return self.prng.randint(self.env.action_space.n)
         else:
             return np.argmax(self.q_network.predict(state))
@@ -510,6 +537,9 @@ class DoubleDQNAgent(QAgent):
         score_e = 0
         step_e = 0
 
+        # Episodic decay (only after linear decay)
+        self.update_epsilon_episode()
+
         # Get current state s
         state = self.preprocess_state(self.env.reset())
 
@@ -521,10 +551,10 @@ class DoubleDQNAgent(QAgent):
                 self.env.render()
 
             # Get learning parameters
-            epsilon = self.get_epsilon()
+            self.update_epsilon_step()
 
             # Act based on current state s
-            action = self.act(state, epsilon)
+            action = self.act(state)
             state_, reward, done, _ = self.env.step(action)
             state_ = self.preprocess_state(state_)
 
@@ -555,8 +585,8 @@ class DoubleDQNAgent(QAgent):
         # Increment episode
         self.episode += 1
 
-        logger.info(
-            f'[Episode {self.episode}] - score: {score_e}, steps: {step_e}, mean score (100 ep.): {mean_score}.')
+        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
+                    f'100-score: {mean_score:.2f}.')
 
     def save_checkpoint(self, config):
         """

@@ -20,7 +20,11 @@ def restore_checkpoint(config):
     """
 
     # Load agent
-    agent = pickle.load(open(config['CHECKPOINT_DIR'] + 'checkpoint.pickle', 'rb'))
+    with open(config['CHECKPOINT_DIR'] + 'checkpoint.pickle', 'rb') as p_file:
+        agent = pickle.load(p_file)
+
+    import pdb
+    pdb.set_trace()
 
     # TODO: be able to restore random state of previous environment --> gym issue (pull request?)
     # TODO: ensure resume works properly (or bring runs back)

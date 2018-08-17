@@ -13,6 +13,10 @@ from .agents import RandomAgent, SarsaAgent, QAgent, DoubleDQNAgent
 from .utilities import prepare_plots, update_plots, restore_checkpoint
 
 
+# TODO: check epsilon and alpha for steps (compare to heerad)
+# TODO: linear decay per step, exp. decay per episode
+
+
 def main(config):
     """
     Runs the lander agent.
