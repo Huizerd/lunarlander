@@ -5,17 +5,14 @@ Contains the agents that can be used.
 
 import json
 import pickle
+import random
 from collections import deque
 
 import gym
 import numpy as np
+import tensorflow as tf
 from gym import logger
 from gym.wrappers import Monitor
-from keras.initializers import glorot_uniform
-from keras.layers import Dense
-from keras.models import Sequential
-from keras.optimizers import Adam
-from keras.regularizers import l2
 
 
 class RandomAgent:
@@ -152,7 +149,7 @@ class SarsaAgent(RandomAgent):
         # First linear decay, then exponential decay
         self.alpha_start, self.alpha_end, self.alpha_steps, self.alpha_decay = config['LEARNING_RATE']
         self.epsilon_start, self.epsilon_end, self.epsilon_steps, self.epsilon_decay = config['E_GREEDY']
-        self.alpha, self.epsilon = None, None
+        self.alpha, self.epsilon = self.alpha_start, self.epsilon_start
         self.gamma = float(config['DISCOUNT_RATE'])
 
         # Q-table
@@ -430,38 +427,105 @@ class DoubleDQNAgent(QAgent):
         self.layers = config['LAYER_SIZES']
         self.batch_size = config['BATCH_SIZE']
 
+        # Also episode as TF variable
+        self.tf_episode = tf.get_variable('episode', shape=(), dtype=tf.int32, trainable=False,
+                                          initializer=tf.zeros_initializer)
+
+        # Initialize placeholders
+        self.initialize_placeholders()
+
         # Build Q-network
-        self.q_network = self.build_network()
+        with tf.variable_scope('q_network'):
+            # Not actually two different networks, since they both use the same weights
+            # NOTE: stop_gradient prevents network from contributing to gradient computation
+            self.q_network = self.build_network(self.ph_state,
+                                                # regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
+                                                trainable=True)  # current state s
 
-        # Build target network and initialize to weights of Q-network
-        self.target_network = self.build_network()
-        self.update_target_network()
+            self.q_network_ = tf.stop_gradient(self.build_network(self.ph_state_, reuse=True))  # next state s'
 
-    def build_network(self):
+        # Build target network
+        with tf.variable_scope('target_network', reuse=False):
+            self.target_network = tf.stop_gradient(self.build_network(self.ph_state_))  # target for next state s'
+
+        # Initialize operations
+        self.initialize_ops()
+
+        # Create session
+        self.sess = tf.Session()
+        self.sess.run(tf.global_variables_initializer())
+
+    def initialize_placeholders(self):
         """
 
         :return:
         """
 
-        network = Sequential()
-        network.add(Dense(self.layers[0], input_shape=self.env.observation_space.shape, activation='relu',
-                          kernel_regularizer=l2(self.l2_reg), kernel_initializer=glorot_uniform(self.env_seed)))
-        network.add(Dense(self.layers[1], activation='relu', kernel_regularizer=l2(self.l2_reg),
-                          kernel_initializer=glorot_uniform(self.env_seed)))
-        network.add(Dense(self.layers[2], activation='relu', kernel_regularizer=l2(self.l2_reg),
-                          kernel_initializer=glorot_uniform(self.env_seed)))
-        network.add(Dense(self.env.action_space.n, activation='linear', kernel_regularizer=l2(self.l2_reg),
-                          kernel_initializer=glorot_uniform(self.env_seed)))
-        network.compile(loss='mse', optimizer=Adam(lr=self.alpha_end, decay=self.alpha_decay))
+        # Placeholders are needed for feeding data to the networks
+        # NOTE: None indicates the batch dimension, which can be any size (determined later)
+        self.ph_done = tf.placeholder(tf.float32, shape=(None,))  # float since multiplication will give error otherwise
+        self.ph_state = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s
+        self.ph_action = tf.placeholder(tf.int32, shape=(None,))  # a
+        self.ph_reward = tf.placeholder(tf.float32, shape=(None,))  # r
+        self.ph_state_ = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s'
 
-        return network
+        # Combine them in a list (comes in handy when feeding dicts)
+        self.ph_list = [self.ph_done, self.ph_state, self.ph_action, self.ph_reward, self.ph_state_]
 
-    def update_target_network(self):
+    def initialize_ops(self):
         """
 
         :return:
         """
-        self.target_network.set_weights(self.q_network.get_weights())
+
+        # Episode increment op
+        self.episode_op = self.tf_episode.assign_add(1)
+
+        # Separate variables of Q-network and target network
+        # NOTE: we use trainable variables to only select from the Q-network for the current state
+        v_q_network = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='q_network')
+        v_target_network = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_network')
+
+        # Build op for updating the target network based on the Q-network for the current state
+        update_target_op = []
+        for i, v_target in enumerate(v_target_network):
+            update_target_op.append(v_target.assign(v_q_network[i]))
+        # Group together
+        self.update_target_op = tf.group(*update_target_op, name='update_target')  # * unpacks the list
+
+        # Build training op
+        self.training_op = self.train(v_q_network)
+
+    def build_network(self, ph_input, regularizer=None, trainable=False, reuse=False):
+        """
+
+        :param ph_input:
+        :param regularizer:
+        :param trainable:
+        :param reuse:
+        :return:
+        """
+
+        # Fully-connected network with 3 hidden layers
+        h1 = tf.layers.dense(ph_input, self.layers[0], activation=tf.nn.relu, kernel_regularizer=regularizer,
+                             trainable=trainable, reuse=reuse, name='dense1')
+        h2 = tf.layers.dense(h1, self.layers[1], activation=tf.nn.relu, kernel_regularizer=regularizer,
+                             trainable=trainable, reuse=reuse, name='dense2')
+        h3 = tf.layers.dense(h2, self.layers[2], activation=tf.nn.relu, kernel_regularizer=regularizer,
+                             trainable=trainable, reuse=reuse, name='dense3')
+
+        # Output layer (squeeze removes dimensions of 1)
+        Q = tf.squeeze(tf.layers.dense(h3, self.env.action_space.n, kernel_regularizer=regularizer,
+                                       trainable=trainable, reuse=reuse, name='dense4'))
+
+        return Q
+
+    # def update_target_network(self):
+    #     """
+    #
+    #     :return:
+    #     """
+    #     self.target_network.set_weights(self.q_network.get_weights())
 
     def act(self, state):
         """
@@ -473,7 +537,8 @@ class DoubleDQNAgent(QAgent):
         if self.prng.random_sample() < self.epsilon:
             return self.prng.randint(self.env.action_space.n)
         else:
-            return np.argmax(self.q_network.predict(state))
+            # NOTE: None is used as index to put another list around it
+            return np.argmax(self.sess.run(self.q_network, feed_dict={self.ph_state: state[None]}))
 
     def remember(self, done, state, action, reward, state_):
         """
@@ -485,45 +550,61 @@ class DoubleDQNAgent(QAgent):
         :param state_:
         :return:
         """
-        self.replay_memory.append((done, state, action, reward, state_))
+        self.replay_memory.append((0.0 if done else 1.0, state, action, reward, state_))
 
-    def train(self):
+    def train(self, v_q_network):
         """
 
         :return:
         """
 
-        # Create minibatch
-        x_batch, y_batch = [], []
+        # Learning targets based on experience replay
+        # Q(s, a) = r if s' terminal
+        # Q(s, a) = r + gamma * Q_target(s', argmax_{a} Q(s', a)) else
+        # NOTE: using Q_target(s', argmax_{a} Q(s', a)) instead of max_{a} Q_target(s', a) makes it double Q-learning
+        # EXPLANATION: first take argmax of next Q, cast this to an int, stack it with a sample index and
+        #   then gather Q-values from the target network based on these indices
+        q_target = self.ph_reward + self.ph_done * self.gamma * tf.gather_nd(self.target_network, tf.stack(
+            (tf.range(self.batch_size), tf.cast(tf.argmax(self.q_network_, axis=1), tf.int32)), axis=1))
+
+        # Now do the same for Q-values from the Q-network (the one that we actually train)
+        # Not the actions we 'wanted' to take (targets), but the actions we would have taken
+        q_taken = tf.gather_nd(self.q_network, tf.stack((tf.range(self.batch_size), self.ph_action), axis=1))
+
+        # Compute loss based on the mean squared error between the two
+        # loss = tf.losses.mean_squared_error(q_target, q_taken)
+        loss = tf.reduce_mean(tf.square(q_target - q_taken))
+
+        # Apply L2 regularization
+        # loss += 0.5 * tf.losses.get_regularization_loss()
+        for v in v_q_network:
+            if not 'bias' in v.name:
+                loss += self.l2_reg * 0.5 * tf.nn.l2_loss(v)
+
+        # Get train op
+        train_op = tf.train.AdamOptimizer(self.alpha * self.alpha_decay ** self.episode).minimize(loss)
+
+        return train_op
+
+    # def preprocess_state(self, state):
+    #     """
+    #
+    #     :param state:
+    #     :return:
+    #     """
+    #     return np.reshape(state, (1,) + self.env.observation_space.shape)
+
+    def get_batch(self):
+        """
+
+        :return:
+        """
+
+        # First create random sample, then select from memory
         sample = self.prng.randint(len(self.replay_memory), size=self.batch_size)
         minibatch = [self.replay_memory[i] for i in sample]
 
-        # Get input and target
-        for done, state, action, reward, state_ in minibatch:
-            y_current = self.q_network.predict(state)
-            y_current_ = self.q_network.predict(state_)
-            y_target_ = self.target_network.predict(state_)
-
-            # Check if next state is terminal, update
-            if done:
-                y_current[0][action] = reward
-            else:
-                y_current[0][action] = reward + self.gamma * y_target_[0][np.argmax(y_current_[0])]
-
-            # Append to training batch
-            x_batch.append(state[0])
-            y_batch.append(y_current[0])
-
-        # Train
-        self.q_network.fit(np.array(x_batch), np.array(y_batch), batch_size=self.batch_size, epochs=1, verbose=0)
-
-    def preprocess_state(self, state):
-        """
-
-        :param state:
-        :return:
-        """
-        return np.reshape(state, (1,) + self.env.observation_space.shape)
+        return minibatch
 
     def do_episode(self, config):
         """
@@ -541,7 +622,7 @@ class DoubleDQNAgent(QAgent):
         self.update_epsilon_episode()
 
         # Get current state s
-        state = self.preprocess_state(self.env.reset())
+        state = self.env.reset()
 
         # Continue while not crashed
         while not done:
@@ -556,18 +637,20 @@ class DoubleDQNAgent(QAgent):
             # Act based on current state s
             action = self.act(state)
             state_, reward, done, _ = self.env.step(action)
-            state_ = self.preprocess_state(state_)
 
             # Add to memory
             self.remember(done, state, action, reward, state_)
 
-            # Train
-            if len(self.replay_memory) > self.batch_size:
-                self.train()
-
             # Set weights of target network to Q-network
             if self.step % config['UPDATE_EVERY'] == 0:
-                self.update_target_network()
+                self.sess.run(self.update_target_op)
+
+            # Train
+            if len(self.replay_memory) >= self.batch_size:
+                # minibatch = self.get_batch()
+                minibatch = random.sample(self.replay_memory, self.batch_size)
+                self.sess.run(self.training_op,
+                              feed_dict={ph: data for ph, data in zip(self.ph_list, map(list, zip(*minibatch)))})
 
             # Set next state to current
             state = state_
@@ -584,6 +667,7 @@ class DoubleDQNAgent(QAgent):
 
         # Increment episode
         self.episode += 1
+        self.sess.run(self.episode_op)
 
         logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
                     f'100-score: {mean_score:.2f}.')
