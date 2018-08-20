@@ -10,6 +10,7 @@ from collections import deque
 import gym
 import numpy as np
 import tensorflow as tf
+from bottleneck import move_mean
 from gym import logger
 from gym.wrappers import Monitor
 
@@ -34,9 +35,13 @@ class RandomAgent:
         # Env
         self.env_id = config['ENV_ID']
         self.env_seed = config['ENV_SEED']
-        self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'] + f'run_{self.run}',
-                           video_callable=lambda episode_id: (episode_id + 1) % config['SAVE_EVERY'] == 0,
-                           force=True, uid=config['AGENT'])  # record every nth episode, clear monitor files if present
+        if config['VERBOSE'] > 0:
+            self.env = Monitor(gym.make(self.env_id), directory=config['RECORD_DIR'] + f'run_{self.run}',
+                               video_callable=lambda episode_id: episode_id % config['SAVE_EVERY'] == 0,
+                               force=True,
+                               uid=config['AGENT'])  # record every nth episode, clear monitor files if present
+        else:
+            self.env = gym.make(self.env_id)
         self.env.seed(self.env_seed)
 
         # Get random number generator
@@ -74,7 +79,7 @@ class RandomAgent:
         while not done:
 
             # Show on screen
-            if config['RENDER']:
+            if config['VERBOSE'] > 1:
                 self.env.render()
 
             # Act
@@ -94,7 +99,29 @@ class RandomAgent:
         # Increment episode
         self.episode += 1
 
-        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, 100-score: {mean_score:.2f}.')
+        if config['VERBOSE'] > 0:
+            logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, '
+                        f'100-score: {mean_score:.2f}.')
+
+    def get_best_score(self):
+        """
+
+        :return:
+        """
+
+        # Best score is defined as highest 100-episode score reached (+ episode) when score < 200,
+        # or the episode when score >= 200
+        score_100 = move_mean(self.score, window=(100 if len(self.score) > 99 else len(self.score)), min_count=1)
+
+        # Get max
+        ep_max = np.argmax(score_100)
+        score_max = score_100[ep_max]
+
+        if score_max >= 200.0:
+            ep_max = np.argmax(score_100 >= 200.0)
+            score_max = 200.0  # to ensure equivalence
+
+        return (ep_max, score_max)
 
     def save_checkpoint(self, config):
         """
@@ -233,7 +260,7 @@ class SarsaAgent(RandomAgent):
         while not done:
 
             # Show on screen
-            if config['RENDER']:
+            if config['VERBOSE'] > 1:
                 self.env.render()
 
             # Update for other steps
@@ -265,8 +292,9 @@ class SarsaAgent(RandomAgent):
         # Increment episode
         self.episode += 1
 
-        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
-                    f'a: {self.alpha:.4f}, 100-score: {mean_score:.2f}.')
+        if config['VERBOSE'] > 0:
+            logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
+                        f'a: {self.alpha:.4f}, 100-score: {mean_score:.2f}.')
 
     def update_alpha_step(self):
         """
@@ -368,7 +396,7 @@ class QAgent(SarsaAgent):
         while not done:
 
             # Show on screen
-            if config['RENDER']:
+            if config['VERBOSE'] > 1:
                 self.env.render()
 
             # Get learning parameters
@@ -399,8 +427,9 @@ class QAgent(SarsaAgent):
         # Increment episode
         self.episode += 1
 
-        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
-                    f'a: {self.alpha:.4f}, 100-score: {mean_score:.2f}.')
+        if config['VERBOSE'] > 0:
+            logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
+                        f'a: {self.alpha:.4f}, 100-score: {mean_score:.2f}.')
 
 
 class DoubleDQNAgent(QAgent):
@@ -614,7 +643,7 @@ class DoubleDQNAgent(QAgent):
         while not done:
 
             # Show on screen
-            if config['RENDER']:
+            if config['VERBOSE'] > 1:
                 self.env.render()
 
             # Get learning parameters
@@ -654,8 +683,9 @@ class DoubleDQNAgent(QAgent):
         self.episode += 1
         self.sess.run(self.episode_op)
 
-        logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
-                    f'100-score: {mean_score:.2f}.')
+        if config['VERBOSE'] > 0:
+            logger.info(f'[Episode {self.episode}] - score: {score_e:.2f}, steps: {step_e}, e: {self.epsilon:.4f}, '
+                        f'100-score: {mean_score:.2f}.')
 
     def save_checkpoint(self, config):
         """
