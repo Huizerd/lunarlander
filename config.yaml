@@ -1,16 +1,16 @@
 # Environment and agent
 ENV_ID: 'LunarLander-v2'
 ENV_SEED: 0
-AGENT: 'sarsa'
+AGENT: 'doubledqn'
 
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/default/'
+RECORD_DIR: 'record/doubledqn_my/'
 CHECKPOINT_DIR: ''
 
 # Run config
-EPISODES: 5000
+EPISODES: 1000
 SAVE_EVERY: 100
 STATE_BINS: [3, 5, 3, 5, 3, 3, 2, 2]  # per state dimension
 STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
