@@ -102,10 +102,9 @@ if __name__ == '__main__':
     # Build grid
     params = list(ParameterGrid(new_grid))
 
-    print(f'About to evaluate {len(params)} parameter sets')
-
     # Start clock
     start = time.time()
+    print(f'About to evaluate {len(params)} parameter sets')
 
     # Disable logger
     logger.set_level(logger.DISABLED)
