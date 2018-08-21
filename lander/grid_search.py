@@ -31,7 +31,7 @@ def eval_single(args):
     scores = []
 
     # 10 runs and average
-    for i in range(3):
+    for i in range(10):
 
         # Set seed based on run index
         params['ENV_SEED'] = i
@@ -119,5 +119,5 @@ if __name__ == '__main__':
 
     # Save grid and scores
     dump = {'grid': params, 'scores': final_scores}
-    with open(config['RECORD_DIR'] + 'grid_search.json', 'w') as g_file:
+    with open(config['RECORD_DIR'][0] + 'grid_search.json', 'w') as g_file:
         json.dump(dump, g_file, sort_keys=True, indent=4)
