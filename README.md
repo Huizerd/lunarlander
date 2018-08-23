@@ -34,7 +34,7 @@ CHECKPOINT_DIR: ''
 # Run config
 EPISODES: 1000
 SAVE_EVERY: 100
-STATE_BINS: [2, 4, 2, 2, 2, 2, 2, 2]  # per state dimension
+STATE_BINS: [5, 5, 5, 5, 5, 5, 2, 2]  # per state dimension
 STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
                [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0]]  # per state dimension
 VERBOSE: 1  # 0: nothing, 1: plots and saved videos, 2: every episode
