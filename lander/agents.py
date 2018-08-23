@@ -121,7 +121,7 @@ class RandomAgent:
             ep_max = np.argmax(score_100 >= 200.0)
             score_max = 200.0  # to ensure equivalence
 
-        return (ep_max, score_max)
+        return (int(ep_max), float(score_max))
 
     def save_checkpoint(self, config):
         """
