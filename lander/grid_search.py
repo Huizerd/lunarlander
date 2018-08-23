@@ -62,7 +62,7 @@ def eval_single(args):
             agent.sess.close()
 
     # Average for episode and score
-    score = (idx,) + tuple(map(lambda x: sum(x) / float(len(x)), zip(*scores)))
+    score = (idx,) + tuple(map(lambda x: sum(x) / float(len(x)), zip(*scores))) + (scores,)
 
     return score
 
@@ -120,4 +120,4 @@ if __name__ == '__main__':
     # Save grid and scores
     dump = {'grid': params, 'scores': final_scores}
     with open(config['RECORD_DIR'][0] + 'grid_search.json', 'w') as g_file:
-        json.dump(dump, g_file, sort_keys=True, indent=4)
+        json.dump(dump, g_file, sort_keys=True, indent=2)

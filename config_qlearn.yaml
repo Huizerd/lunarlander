@@ -1,12 +1,12 @@
 # Environment and agent
 ENV_ID: 'LunarLander-v2'
 ENV_SEED: 0
-AGENT: 'sarsa'
+AGENT: 'qlearn'
 
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/sarsa_bins2/'
+RECORD_DIR: 'record/qlearn_bins/'
 CHECKPOINT_DIR: ''
 
 # Run config
