@@ -6,13 +6,13 @@ AGENT: 'sarsa'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/sarsa_bins2/'
+RECORD_DIR: 'record/sarsa_greedy/'
 CHECKPOINT_DIR: ''
 
 # Run config
 EPISODES: 5000
 SAVE_EVERY: 100
-STATE_BINS: [3, 5, 3, 5, 3, 3, 2, 2]  # per state dimension
+STATE_BINS: [5, 5, 5, 5, 5, 5, 2, 2]  # per state dimension
 STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
                [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0]]  # per state dimension
 VERBOSE: 1  # 0: nothing, 1: plots and saved videos, 2: every episode
@@ -22,6 +22,6 @@ CONTINUE: False
 # Format: start value, end value, # of episodes, decay factor
 # NOTE: linear slope between start and end, then exponential decay
 # NOTE: use 0 as # of episodes to do only exponential decay
-E_GREEDY: [1.0, 0.05, 1e5, 0.999]
+E_GREEDY: [1.0, 0.05, 1e5, 0.97]
 LEARNING_RATE: [0.1, 0.001, 2e5, 1]
 DISCOUNT_RATE: 0.99

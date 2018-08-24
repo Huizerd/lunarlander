@@ -99,13 +99,13 @@ To make the learning problem (more) tractable, the state can be discretized into
 A grid search over different hyperparameter combinations can be performed using `grid_search.py`:
 
 ```bash
-$ python -m lander/grid_search.py
+$ python lander/grid_search.py
 ```
 
 which uses the default configuration and grid. Custom variants can be called like this:
 
 ```bash
-$ python -m lander/grid_search.py -c config.yaml -g grid_search.yaml
+$ python lander/grid_search.py -c config.yaml -g grid_search.yaml
 ```
 
 The goal of performing a grid search is twofold: finding the best hyperparameters for the problem,
