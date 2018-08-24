@@ -1,6 +1,10 @@
 # LunarLander-v2 for AE4311
 Implementation of OpenAI Gym's [LunarLander-v2](https://gym.openai.com/envs/LunarLander-v2/) for the AE4311 Advanced Flight Control course at TU Delft.
 
+Before training            |  After training
+:-------------------------:|:-------------------------:
+![](readme_files/before.gif)  |  ![](readme_files/after.gif)
+
 ## Installation
 Tested on Ubuntu 18.04, with Python 3.6.5. Ensure all Ubuntu repositories are enabled (can be done with `sudo add-apt-repository universe restricted multiverse`)
 ```bash

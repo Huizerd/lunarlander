@@ -1,0 +1,24 @@
+# Standard
+# ============
+* text=auto
+
+# Source files
+# ============
+*.py text
+*.sh text
+*.txt text
+*.yaml text
+*.md text
+checkpoint text
+*.meta text
+*.json text
+
+
+
+# Binary files
+# ============
+*.data-00000-of-00001 binary
+*.index binary
+*.pickle binary
+*.pdf binary
+*.gif binary
