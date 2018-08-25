@@ -6,13 +6,13 @@ AGENT: 'qlearn'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/qlearn_bins/'
+RECORD_DIR: 'record/qlearn_greedy/'
 CHECKPOINT_DIR: ''
 
 # Run config
 EPISODES: 5000
 SAVE_EVERY: 100
-STATE_BINS: [4, 4, 4, 4, 4, 4, 2, 2]  # per state dimension
+STATE_BINS: [5, 5, 5, 5, 5, 5, 2, 2]  # per state dimension
 STATE_BOUNDS: [[-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0],
                [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0], [-1.0, 1.0]]  # per state dimension
 VERBOSE: 1  # 0: nothing, 1: plots and saved videos, 2: every episode
