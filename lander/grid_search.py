@@ -61,6 +61,9 @@ def eval_single(args):
         if params['AGENT'] == 'doubledqn':
             agent.sess.close()
 
+        # Delete agent
+        del agent
+
     # Average for episode and score
     score = (idx,) + tuple(map(lambda x: sum(x) / float(len(x)), zip(*scores))) + (scores,)
 
