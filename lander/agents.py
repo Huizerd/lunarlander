@@ -456,6 +456,9 @@ class DoubleDQNAgent(QAgent):
         self.layers = config['LAYER_SIZES']
         self.batch_size = config['BATCH_SIZE']
 
+        # Reset default graph (needed in case of grid search)
+        tf.reset_default_graph()
+
         # Set random seed for TF
         # TODO: is this the correct place for seed?
         tf.set_random_seed(self.env_seed)
