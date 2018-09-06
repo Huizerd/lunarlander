@@ -121,7 +121,7 @@ class RandomAgent:
             ep_max = np.argmax(score_100 >= 200.0)
             score_max = 200.0  # to ensure equivalence
 
-        return (int(ep_max), float(score_max))
+        return int(ep_max), float(score_max)
 
     def save_checkpoint(self, config):
         """
@@ -458,9 +458,10 @@ class DoubleDQNAgent(QAgent):
 
         # Reset default graph (needed in case of grid search)
         # tf.reset_default_graph()
-        self.graph = tf.Graph()
+        # self.graph = tf.Graph()
+        self.sess = tf.Session()
 
-        with self.graph.as_default():
+        with self.sess.graph.as_default():
             # Set random seed for TF
             # TODO: is this the correct place for seed?
             tf.set_random_seed(self.env_seed)
@@ -470,7 +471,8 @@ class DoubleDQNAgent(QAgent):
                                               initializer=tf.zeros_initializer)
 
             # Initialize placeholders
-            self.initialize_placeholders()
+            self.ph_done, self.ph_state, self.ph_action, \
+            self.ph_reward, self.ph_state_, self.ph_list = self.initialize_placeholders()
 
             # Build Q-network
             with tf.variable_scope('q_network'):
@@ -486,11 +488,12 @@ class DoubleDQNAgent(QAgent):
                 self.target_network = tf.stop_gradient(self.build_network(self.ph_state_))  # target for next state s'
 
             # Initialize operations
-            self.initialize_ops()
+            self.episode_op, self.update_target_op, self.training_op, self.global_var_init_op = self.initialize_ops()
 
             # Create session
-            self.sess = tf.Session()
-            self.sess.run(tf.global_variables_initializer())
+            # self.sess = tf.Session()
+
+        self.sess.run(self.global_var_init_op)
 
     def initialize_placeholders(self):
         """
@@ -500,14 +503,16 @@ class DoubleDQNAgent(QAgent):
 
         # Placeholders are needed for feeding data to the networks
         # NOTE: None indicates the batch dimension, which can be any size (determined later)
-        self.ph_done = tf.placeholder(tf.float32, shape=(None,))  # float since multiplication will give error otherwise
-        self.ph_state = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s
-        self.ph_action = tf.placeholder(tf.int32, shape=(None,))  # a
-        self.ph_reward = tf.placeholder(tf.float32, shape=(None,))  # r
-        self.ph_state_ = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s'
+        ph_done = tf.placeholder(tf.float32, shape=(None,))  # float since multiplication will give error otherwise
+        ph_state = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s
+        ph_action = tf.placeholder(tf.int32, shape=(None,))  # a
+        ph_reward = tf.placeholder(tf.float32, shape=(None,))  # r
+        ph_state_ = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s'
 
         # Combine them in a list (comes in handy when feeding dicts)
-        self.ph_list = [self.ph_done, self.ph_state, self.ph_action, self.ph_reward, self.ph_state_]
+        ph_list = [ph_done, ph_state, ph_action, ph_reward, ph_state_]
+
+        return ph_done, ph_state, ph_action, ph_reward, ph_state_, ph_list
 
     def initialize_ops(self):
         """
@@ -516,7 +521,7 @@ class DoubleDQNAgent(QAgent):
         """
 
         # Episode increment op
-        self.episode_op = self.tf_episode.assign_add(1)
+        episode_op = self.tf_episode.assign_add(1)
 
         # Separate variables of Q-network and target network
         # NOTE: we use trainable variables to only select from the Q-network for the current state
@@ -528,10 +533,15 @@ class DoubleDQNAgent(QAgent):
         for i, v_target in enumerate(v_target_network):
             update_target_op.append(v_target.assign(v_q_network[i]))
         # Group together
-        self.update_target_op = tf.group(*update_target_op, name='update_target')  # * unpacks the list
+        update_target_op = tf.group(*update_target_op, name='update_target')  # * unpacks the list
 
         # Build training op
-        self.training_op = self.train()
+        training_op = self.train()
+
+        # Variable init op
+        global_var_init_op = tf.global_variables_initializer()
+
+        return episode_op, update_target_op, training_op, global_var_init_op
 
     def build_network(self, ph_input, regularizer=None, trainable=False, reuse=False):
         """
@@ -552,10 +562,10 @@ class DoubleDQNAgent(QAgent):
                              trainable=trainable, reuse=reuse, name='dense3')
 
         # Output layer (squeeze removes dimensions of 1)
-        Q = tf.squeeze(tf.layers.dense(h3, self.env.action_space.n, kernel_regularizer=regularizer,
+        q = tf.squeeze(tf.layers.dense(h3, self.env.action_space.n, kernel_regularizer=regularizer,
                                        trainable=trainable, reuse=reuse, name='dense4'))
 
-        return Q
+        return q
 
     def act(self, state):
         """

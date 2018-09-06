@@ -6,7 +6,7 @@ AGENT: 'qlearn'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/qlearn_greedy/'
+RECORD_DIR: 'record/qlearn_bins3/'
 CHECKPOINT_DIR: ''
 
 # Run config

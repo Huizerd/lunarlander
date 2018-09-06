@@ -31,7 +31,7 @@ def eval_single(args):
     scores = []
 
     # 10 runs and average
-    for i in range(3):
+    for i in range(1):
 
         # Set seed based on run index
         params['ENV_SEED'] = i
