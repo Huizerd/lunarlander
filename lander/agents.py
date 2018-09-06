@@ -458,10 +458,10 @@ class DoubleDQNAgent(QAgent):
 
         # Reset default graph (needed in case of grid search)
         # tf.reset_default_graph()
-        # self.graph = tf.Graph()
-        self.sess = tf.Session()
+        self.graph = tf.Graph()
+        # self.sess = tf.Session()
 
-        with self.sess.graph.as_default():
+        with self.graph.as_default():
             # Set random seed for TF
             # TODO: is this the correct place for seed?
             tf.set_random_seed(self.env_seed)
@@ -490,9 +490,8 @@ class DoubleDQNAgent(QAgent):
             # Initialize operations
             self.episode_op, self.update_target_op, self.training_op, self.global_var_init_op = self.initialize_ops()
 
-            # Create session
-            # self.sess = tf.Session()
-
+        # Create session
+        self.sess = tf.Session(graph=self.graph)
         self.sess.run(self.global_var_init_op)
 
     def initialize_placeholders(self):
