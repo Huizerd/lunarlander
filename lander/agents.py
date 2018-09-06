@@ -457,38 +457,40 @@ class DoubleDQNAgent(QAgent):
         self.batch_size = config['BATCH_SIZE']
 
         # Reset default graph (needed in case of grid search)
-        tf.reset_default_graph()
+        # tf.reset_default_graph()
+        self.graph = tf.Graph()
 
-        # Set random seed for TF
-        # TODO: is this the correct place for seed?
-        tf.set_random_seed(self.env_seed)
+        with self.graph.as_default():
+            # Set random seed for TF
+            # TODO: is this the correct place for seed?
+            tf.set_random_seed(self.env_seed)
 
-        # Also episode as TF variable
-        self.tf_episode = tf.get_variable('episode', shape=(), dtype=tf.int32, trainable=False,
-                                          initializer=tf.zeros_initializer)
+            # Also episode as TF variable
+            self.tf_episode = tf.get_variable('episode', shape=(), dtype=tf.int32, trainable=False,
+                                              initializer=tf.zeros_initializer)
 
-        # Initialize placeholders
-        self.initialize_placeholders()
+            # Initialize placeholders
+            self.initialize_placeholders()
 
-        # Build Q-network
-        with tf.variable_scope('q_network'):
-            # Not actually two different networks, since they both use the same weights
-            # NOTE: stop_gradient prevents network from contributing to gradient computation
-            self.q_network = self.build_network(self.ph_state,
-                                                regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
-                                                trainable=True)  # current state s
-            self.q_network_ = tf.stop_gradient(self.build_network(self.ph_state_, reuse=True))  # next state s'
+            # Build Q-network
+            with tf.variable_scope('q_network'):
+                # Not actually two different networks, since they both use the same weights
+                # NOTE: stop_gradient prevents network from contributing to gradient computation
+                self.q_network = self.build_network(self.ph_state,
+                                                    regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
+                                                    trainable=True)  # current state s
+                self.q_network_ = tf.stop_gradient(self.build_network(self.ph_state_, reuse=True))  # next state s'
 
-        # Build target network
-        with tf.variable_scope('target_network', reuse=False):
-            self.target_network = tf.stop_gradient(self.build_network(self.ph_state_))  # target for next state s'
+            # Build target network
+            with tf.variable_scope('target_network', reuse=False):
+                self.target_network = tf.stop_gradient(self.build_network(self.ph_state_))  # target for next state s'
 
-        # Initialize operations
-        self.initialize_ops()
+            # Initialize operations
+            self.initialize_ops()
 
-        # Create session
-        self.sess = tf.Session()
-        self.sess.run(tf.global_variables_initializer())
+            # Create session
+            self.sess = tf.Session()
+            self.sess.run(tf.global_variables_initializer())
 
     def initialize_placeholders(self):
         """

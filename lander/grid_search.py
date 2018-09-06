@@ -118,6 +118,10 @@ if __name__ == '__main__':
     # Run
     final_scores = pool.map(eval_single, list(enumerate(params)))
 
+    # Close
+    pool.close()
+    pool.join()
+
     print(f'Execution time: {time.time() - start} sec')
 
     # Save grid and scores
