@@ -10,6 +10,20 @@ import matplotlib.pyplot as plt
 from bottleneck import move_mean
 from gym.wrappers import Monitor
 
+# Matplotlib config
+plt.style.use('ggplot')
+# plt.rcParams['lines.linewidth'] = 2
+plt.rcParams['font.family'] = 'serif'
+plt.rcParams['font.serif'] = 'Ubuntu'
+plt.rcParams['font.monospace'] = 'Ubuntu Mono'
+plt.rcParams['font.size'] = 12
+plt.rcParams['axes.labelsize'] = 12
+plt.rcParams['axes.labelweight'] = 'bold'
+plt.rcParams['xtick.labelsize'] = 12
+plt.rcParams['ytick.labelsize'] = 12
+plt.rcParams['legend.fontsize'] = 12
+plt.rcParams['figure.titlesize'] = 14
+
 
 # TODO: make restore working for double DQN (including TF random seed)
 
@@ -45,23 +59,24 @@ def prepare_plots():
 
     # Interactive, style
     plt.ion()
-    plt.style.use('fivethirtyeight')
-    plt.rcParams['lines.linewidth'] = 2
+    # plt.style.use('fivethirtyeight')
+    # plt.rcParams['lines.linewidth'] = 2
 
     # Get figure and subplots
-    figure = plt.figure()
-    axes = [figure.add_subplot(211), figure.add_subplot(212)]
+    figure = plt.figure(figsize=(16, 4))
+    axes = [figure.add_subplot(121), figure.add_subplot(122)]
 
     # Configure subplots
+    axes[0].set_xlabel('episode')
     axes[0].set_ylabel('score')
-    axes[0].set_title('Score over episodes')
-    axes[1].set_ylabel('score')
-    axes[1].set_title('Score moving average over episodes')
+    axes[0].set_title('Score over episodes', fontstyle='italic')
     axes[1].set_xlabel('episode')
+    axes[1].set_ylabel('score')
+    axes[1].set_title('Score moving average over episodes', fontstyle='italic')
 
     # Get lines
-    lines = [axes[0].plot([0], color='#008fd5')[0],
-             axes[1].plot([0], color='#008fd5')[0]]
+    lines = [axes[0].plot([0])[0],
+             axes[1].plot([0])[0]]
 
     return figure, axes, lines
 

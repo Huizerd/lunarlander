@@ -15,7 +15,7 @@ from gym import logger
 from sklearn.model_selection import ParameterGrid
 
 
-# TODO: create plots at the end
+# TODO: to test: sarsa with higher LR, no drop-off;
 
 def eval_single(args):
     """
@@ -61,11 +61,8 @@ def eval_single(args):
         if params['AGENT'] == 'doubledqn':
             agent.sess.close()
 
-        # Delete agent
-        del agent
-
     # Average for episode and score
-    score = (idx,) + tuple(map(lambda x: sum(x) / float(len(x)), zip(*scores))) + (scores,)
+    score = (idx,) + tuple(map(lambda x: sum(x) / float(len(x)), zip(*scores)))
 
     return score
 
@@ -122,9 +119,10 @@ if __name__ == '__main__':
     pool.close()
     pool.join()
 
-    print(f'Execution time: {time.time() - start} sec')
+    # Finished!
+    print(f'Execution time: {(time.time() - start) / 3600:.2f} hours')
 
     # Save grid and scores
     dump = {'grid': params, 'scores': final_scores}
-    with open(config['RECORD_DIR'][0] + 'grid_search.json', 'w') as g_file:
-        json.dump(dump, g_file, sort_keys=True, indent=2)
+    with open(config['RECORD_DIR'][0] + 'grid_search.json', 'w') as result_file:
+        json.dump(dump, result_file, sort_keys=True, indent=2)

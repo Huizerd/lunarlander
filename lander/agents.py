@@ -457,41 +457,42 @@ class DoubleDQNAgent(QAgent):
         self.batch_size = config['BATCH_SIZE']
 
         # Reset default graph (needed in case of grid search)
-        # tf.reset_default_graph()
-        self.graph = tf.Graph()
-        # self.sess = tf.Session()
+        tf.reset_default_graph()
+        # self.graph = tf.Graph()
+        self.sess = tf.Session()
 
-        with self.graph.as_default():
-            # Set random seed for TF
-            # TODO: is this the correct place for seed?
-            tf.set_random_seed(self.env_seed)
+        # with self.graph.as_default():
+        # Set random seed for TF
+        # TODO: is this the correct place for seed?
+        tf.set_random_seed(self.env_seed)
 
-            # Also episode as TF variable
-            self.tf_episode = tf.get_variable('episode', shape=(), dtype=tf.int32, trainable=False,
-                                              initializer=tf.zeros_initializer)
+        # Also episode as TF variable
+        self.tf_episode = tf.get_variable('episode', shape=(), dtype=tf.int32, trainable=False,
+                                          initializer=tf.zeros_initializer)
 
-            # Initialize placeholders
-            self.ph_done, self.ph_state, self.ph_action, \
-            self.ph_reward, self.ph_state_, self.ph_list = self.initialize_placeholders()
+        # Initialize placeholders
+        self.ph_done, self.ph_state, self.ph_action, \
+        self.ph_reward, self.ph_state_, self.ph_list = self.initialize_placeholders()
 
-            # Build Q-network
-            with tf.variable_scope('q_network'):
-                # Not actually two different networks, since they both use the same weights
-                # NOTE: stop_gradient prevents network from contributing to gradient computation
-                self.q_network = self.build_network(self.ph_state,
-                                                    regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
-                                                    trainable=True)  # current state s
-                self.q_network_ = tf.stop_gradient(self.build_network(self.ph_state_, reuse=True))  # next state s'
+        # Build Q-network
+        with tf.variable_scope('q_network'):
+            # Not actually two different networks, since they both use the same weights
+            # NOTE: stop_gradient prevents network from contributing to gradient computation
+            self.q_network = self.build_network(self.ph_state,
+                                                regularizer=tf.contrib.layers.l2_regularizer(self.l2_reg),
+                                                trainable=True)  # current state s
+            self.q_network_ = tf.stop_gradient(self.build_network(self.ph_state_, reuse=True))  # next state s'
 
-            # Build target network
-            with tf.variable_scope('target_network', reuse=False):
-                self.target_network = tf.stop_gradient(self.build_network(self.ph_state_))  # target for next state s'
+        # Build target network
+        with tf.variable_scope('target_network', reuse=False):
+            self.target_network = tf.stop_gradient(
+                self.build_network(self.ph_state_))  # target for next state s'
 
-            # Initialize operations
-            self.episode_op, self.update_target_op, self.training_op, self.global_var_init_op = self.initialize_ops()
+        # Initialize operations
+        self.episode_op, self.update_target_op, self.training_op, self.global_var_init_op = self.initialize_ops()
 
         # Create session
-        self.sess = tf.Session(graph=self.graph)
+        # self.sess = tf.Session(graph=self.graph)
         self.sess.run(self.global_var_init_op)
 
     def initialize_placeholders(self):
@@ -502,7 +503,8 @@ class DoubleDQNAgent(QAgent):
 
         # Placeholders are needed for feeding data to the networks
         # NOTE: None indicates the batch dimension, which can be any size (determined later)
-        ph_done = tf.placeholder(tf.float32, shape=(None,))  # float since multiplication will give error otherwise
+        ph_done = tf.placeholder(tf.float32,
+                                 shape=(None,))  # float since multiplication will give error otherwise
         ph_state = tf.placeholder(tf.float32, shape=(None,) + self.env.observation_space.shape)  # s
         ph_action = tf.placeholder(tf.int32, shape=(None,))  # a
         ph_reward = tf.placeholder(tf.float32, shape=(None,))  # r
@@ -606,11 +608,13 @@ class DoubleDQNAgent(QAgent):
         # EXPLANATION: first take argmax of next Q, cast this to an int, stack it with a sample index and
         #   then gather Q-values from the target network based on these indices
         q_target = self.ph_reward + self.ph_done * self.gamma * tf.gather_nd(self.target_network, tf.stack(
-            (tf.range(self.batch_size), tf.cast(tf.argmax(self.q_network_, axis=1), tf.int32)), axis=1))
+            (tf.range(self.batch_size), tf.cast(tf.argmax(self.q_network_, axis=1), tf.int32)),
+            axis=1))
 
         # Now do the same for Q-values from the Q-network (the one that we actually train)
         # Not the actions we 'wanted' to take (targets), but the actions we would have taken
-        q_taken = tf.gather_nd(self.q_network, tf.stack((tf.range(self.batch_size), self.ph_action), axis=1))
+        q_taken = tf.gather_nd(self.q_network,
+                               tf.stack((tf.range(self.batch_size), self.ph_action), axis=1))
 
         # Compute loss based on the mean squared error between the two
         loss = tf.losses.mean_squared_error(q_target, q_taken)

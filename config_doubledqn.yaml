@@ -6,7 +6,7 @@ AGENT: 'doubledqn'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/doubledqn/'
+RECORD_DIR: 'record/doubledqn_batchsize/'
 CHECKPOINT_DIR: ''
 
 # Run config
@@ -30,5 +30,5 @@ DISCOUNT_RATE: 0.99
 L2_REG: 1e-6
 UPDATE_EVERY: 100
 REPLAY_MEMORY_SIZE: 1e6
-BATCH_SIZE: 32
+BATCH_SIZE: 64
 LAYER_SIZES: [512, 512, 512]

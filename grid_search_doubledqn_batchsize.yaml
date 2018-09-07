@@ -1,0 +1,2 @@
+# Network parameters
+BATCH_SIZE: [32, 64, 128]
