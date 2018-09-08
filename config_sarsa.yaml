@@ -6,7 +6,7 @@ AGENT: 'sarsa'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/sarsa_slowlearn2/'
+RECORD_DIR: 'record/sarsa_slowlearn3/'
 CHECKPOINT_DIR: ''
 
 # Run config
