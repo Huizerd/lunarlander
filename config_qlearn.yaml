@@ -6,7 +6,7 @@ AGENT: 'qlearn'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/qlearn_bins3/'
+RECORD_DIR: 'record/qlearn/'
 CHECKPOINT_DIR: ''
 
 # Run config
@@ -23,5 +23,5 @@ CONTINUE: False
 # NOTE: linear slope between start and end, then exponential decay
 # NOTE: use 0 as # of episodes to do only exponential decay
 E_GREEDY: [1.0, 0.05, 1e5, 0.97]
-LEARNING_RATE: [0.1, 0.001, 2e5, 1]
+LEARNING_RATE: [0.2, 0.2, 0, 1]
 DISCOUNT_RATE: 0.99

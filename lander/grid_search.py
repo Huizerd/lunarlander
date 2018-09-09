@@ -15,8 +15,6 @@ from gym import logger
 from sklearn.model_selection import ParameterGrid
 
 
-# TODO: to test: sarsa with higher LR, no drop-off;
-
 def eval_single(args):
     """
 
