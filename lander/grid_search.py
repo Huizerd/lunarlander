@@ -122,5 +122,5 @@ if __name__ == '__main__':
 
     # Save grid and scores
     dump = {'grid': params, 'scores': final_scores}
-    with open(config['RECORD_DIR'][0] + 'grid_search.json', 'w') as result_file:
+    with open(new_grid['RECORD_DIR'][0] + 'grid_search.json', 'w') as result_file:
         json.dump(dump, result_file, sort_keys=True, indent=2)
