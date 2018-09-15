@@ -82,23 +82,19 @@ if __name__ == '__main__':
     # Ensure verbose is 0
     config['VERBOSE'] = 0
 
-    # Create recording directory if it doesn't exist
-    if not os.path.exists(config['RECORD_DIR']):
-        os.makedirs(config['RECORD_DIR'])
-
     # Put all values in lists
     config = {key: [value] for key, value in config.items()}
 
-    # Load parameter grid
+    # Load parameter grid configuration
     with open(args['grid'], 'r') as grid_file:
-        grid = yaml.load(grid_file)
+        grid_config = yaml.load(grid_file)
 
-    # Overwrite config with grid
-    # NOTE: get() makes use of a default value in case key is not in grid
-    new_grid = {key: grid.get(key, config[key]) for key in config}
+    # Overwrite config
+    # NOTE: get() makes use of a default value in case key is not in grid_config
+    config = {key: grid_config.get(key, config[key]) for key in config}
 
-    # Build grid
-    params = list(ParameterGrid(new_grid))
+    # Build parameter grid
+    params = list(ParameterGrid(config))
 
     # Start clock
     start = time.time()
@@ -120,7 +116,11 @@ if __name__ == '__main__':
     # Finished!
     print(f'Execution time: {(time.time() - start) / 3600:.2f} hours')
 
+    # Create recording directory if it doesn't exist
+    if not os.path.exists(config['RECORD_DIR'][0]):
+        os.makedirs(config['RECORD_DIR'][0])
+
     # Save grid and scores
     dump = {'grid': params, 'scores': final_scores}
-    with open(new_grid['RECORD_DIR'][0] + 'grid_search.json', 'w') as result_file:
+    with open(config['RECORD_DIR'][0] + 'grid_search.json', 'w') as result_file:
         json.dump(dump, result_file, sort_keys=True, indent=2)
