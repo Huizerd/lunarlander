@@ -1,0 +1,5 @@
+# Data locations
+RECORD_DIR: ['record/final/sarsa_lr/']
+
+# Learning parameters
+LEARNING_RATE: [[0.1, 0.1, 0, 1], [0.15, 0.15, 0, 1], [0.2, 0.2, 0, 1], [0.25, 0.25, 0, 1], [0.3, 0.3, 0, 1]]

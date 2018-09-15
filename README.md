@@ -21,8 +21,8 @@ To run the default configuration:
 ```bash
 $ python -m lander
 ```
-Of course, other configurations can be specified. See `config.yaml.default` for the default values.
-An example configuration, saved under `config.yaml`, would be:
+Of course, other configurations can be specified. See `config/config.yaml.default` for the default values.
+An example configuration, saved under `config/config.yaml`, would be:
 ```yaml
 # Environment and agent
 ENV_ID: 'LunarLander-v2'
@@ -62,7 +62,7 @@ LAYER_SIZES: [512, 512, 512]
 
 Which would then be called like this:
 ```bash
-$ python -m lander -c config.yaml
+$ python -m lander -c config/config.yaml
 ```
 
 ## Agents
@@ -105,7 +105,7 @@ $ python lander/grid_search.py
 which uses the default configuration and grid. Custom variants can be called like this:
 
 ```bash
-$ python lander/grid_search.py -c config.yaml -g grid_search.yaml
+$ python lander/grid_search.py -c config/config.yaml -g grid/grid_search.yaml
 ```
 
 The goal of performing a grid search is twofold: finding the best hyperparameters for the problem,

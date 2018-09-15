@@ -59,8 +59,6 @@ def prepare_plots():
 
     # Interactive, style
     plt.ion()
-    # plt.style.use('fivethirtyeight')
-    # plt.rcParams['lines.linewidth'] = 2
 
     # Get figure and subplots
     figure = plt.figure(figsize=(16, 4))

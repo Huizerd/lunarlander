@@ -76,7 +76,7 @@ if __name__ == '__main__':
 
     # Parse for configuration file
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('-c', '--config', type=str, default='config.yaml.default',
+    parser.add_argument('-c', '--config', type=str, default='config/config.yaml.default',
                         help='Select the configuration file')
     args = vars(parser.parse_args())
 

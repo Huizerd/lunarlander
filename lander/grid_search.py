@@ -69,9 +69,9 @@ if __name__ == '__main__':
 
     # Parse for configuration file
     parser = argparse.ArgumentParser(description=None)
-    parser.add_argument('-c', '--config', type=str, default='config.yaml.default',
+    parser.add_argument('-c', '--config', type=str, default='config/config.yaml.default',
                         help='Select the configuration file')
-    parser.add_argument('-g', '--grid', type=str, default='grid_search.yaml.default',
+    parser.add_argument('-g', '--grid', type=str, default='grid/grid_search.yaml.default',
                         help='Select the parameter grid')
     args = vars(parser.parse_args())
 
