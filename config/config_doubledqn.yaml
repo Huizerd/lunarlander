@@ -6,7 +6,7 @@ AGENT: 'doubledqn'
 # Data locations
 # NOTE: setting RECORD_DIR to an existing directory will overwrite!
 # NOTE: CHECKPOINT_DIR can be anything when CONTINUE is False
-RECORD_DIR: 'record/doubledqn_layersize/'
+RECORD_DIR: 'record/doubledqn/'
 CHECKPOINT_DIR: ''
 
 # Run config

@@ -61,20 +61,19 @@ def prepare_plots():
     plt.ion()
 
     # Get figure and subplots
-    figure = plt.figure(figsize=(16, 4))
-    axes = [figure.add_subplot(121), figure.add_subplot(122)]
+    figure = plt.figure(figsize=(10, 5))
+    axes = [figure.add_subplot(111)]  # 121), figure.add_subplot(122)]
 
     # Configure subplots
-    axes[0].set_xlabel('episode')
-    axes[0].set_ylabel('score')
-    axes[0].set_title('Score over episodes', fontstyle='italic')
-    axes[1].set_xlabel('episode')
-    axes[1].set_ylabel('score')
-    axes[1].set_title('Score moving average over episodes', fontstyle='italic')
+    axes[0].set_xlabel('episode [-]')
+    axes[0].set_ylabel('score [-]')
+    axes[0].set_title('Score moving average', fontstyle='italic')
+    # axes[1].set_xlabel('episode')
+    # axes[1].set_ylabel('score')
+    # axes[1].set_title('Score moving average over episodes', fontstyle='italic')
 
     # Get lines
-    lines = [axes[0].plot([0])[0],
-             axes[1].plot([0])[0]]
+    lines = [axes[0].plot([0])[0]]
 
     return figure, axes, lines
 
@@ -94,8 +93,8 @@ def update_plots(figure, axes, lines, episode, score):
     score_ma = move_mean(score, window=(100 if len(score) > 99 else len(score)), min_count=1)
 
     # Update plot
-    lines[0].set_data(range(1, episode + 1), score)
-    lines[1].set_data(range(1, episode + 1), score_ma)
+    # lines[0].set_data(range(1, episode + 1), score)
+    lines[0].set_data(range(1, episode + 1), score_ma)
 
     # Rescale axes
     for ax in axes:

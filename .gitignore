@@ -107,6 +107,7 @@ venv.bak/
 .idea/
 
 # Result files
-train/
-test/
 record/
+
+# Figures
+figure/
