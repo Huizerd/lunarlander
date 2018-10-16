@@ -6,7 +6,7 @@ Before training            |  After training (Sarsa/Q-learning)    |  After trai
 ![](readme_files/before.gif)  |  ![](readme_files/after_qlearn.gif) | ![](readme_files/after_doubleDQN.gif) 
 
 ## Installation
-Tested on Ubuntu 18.04, with Python 3.6.5. Ensure all Ubuntu repositories are enabled (can be done with `sudo add-apt-repository universe restricted multiverse`)
+Tested on Ubuntu 18.04, with Python 3.6.5. Ensure all Ubuntu repositories are enabled (can be done with `sudo add-apt-repository universe restricted multiverse`).
 ```bash
 $ sudo apt install -y python3-numpy python3-dev cmake zlib1g-dev libjpeg-dev xvfb xorg-dev python3-opengl libboost-all-dev libsdl2-dev swig
 $ git clone https://github.com/Huizerd/lunarlander.git
