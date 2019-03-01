@@ -1,4 +1,6 @@
 # LunarLander-v2 for AE4311
+[![HitCount](http://hits.dwyl.io/Huizerd/lunarlander.svg)](http://hits.dwyl.io/Huizerd/lunarlander)
+
 Implementation of OpenAI Gym's [LunarLander-v2](https://gym.openai.com/envs/LunarLander-v2/) for the AE4311 Advanced Flight Control course at TU Delft.
 
 Before training            |  After training (Sarsa/Q-learning)    |  After training (double DQN)   |
