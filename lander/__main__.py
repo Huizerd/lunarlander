@@ -1,6 +1,5 @@
 """
 Runs the lander agent.
-@author: Jesse Hagenaars
 """
 
 import argparse
