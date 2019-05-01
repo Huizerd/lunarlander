@@ -1,6 +1,5 @@
 """
 Contains the agents that can be used.
-@author: Jesse Hagenaars
 """
 
 import json
