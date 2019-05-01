@@ -1,6 +1,5 @@
 """
 Contains utilities.
-@author: Jesse Hagenaars
 """
 
 import pickle
