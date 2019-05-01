@@ -1,6 +1,5 @@
 """
 Performs a parameter grid search.
-@author: Jesse Hagenaars
 """
 
 import argparse
